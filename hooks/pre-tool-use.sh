@@ -14,9 +14,33 @@ CWD="$(echo "$PAYLOAD" | python3 -c "import sys,json; d=json.load(sys.stdin); pr
 RESPONSE="$(curl -sf -X POST "${SERVER}/hooks/pre-tool-use" \
   -H "Content-Type: application/json" \
   -d "{\"session_id\":\"${SESSION_ID}\",\"tool_name\":\"${TOOL_NAME}\",\"tool_use_id\":\"${TOOL_USE_ID}\",\"tool_input\":${TOOL_INPUT},\"cwd\":\"${CWD}\"}" \
-  --max-time 10 2>/dev/null)" || exit 0
+  --max-time 15 2>/dev/null)" || exit 0
 
 APPROVAL_ID="$(echo "$RESPONSE" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('approval_id',''))" 2>/dev/null)"
+QUESTION_ID="$(echo "$RESPONSE" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('question_id',''))" 2>/dev/null)"
+
+# Poll for AskUserQuestion answer from dashboard
+if [ -n "$QUESTION_ID" ]; then
+  DEADLINE=$(( $(date +%s) + APPROVAL_TIMEOUT ))
+  while true; do
+    [ $(date +%s) -ge $DEADLINE ] && exit 0  # timeout: fall through to normal terminal UI
+    STATUS_RESP="$(curl -sf "${SERVER}/api/questions/${QUESTION_ID}/status" --max-time 5 2>/dev/null)" || exit 0
+    STATUS="$(echo "$STATUS_RESP" | python3 -c "import sys,json; print(json.load(sys.stdin).get('status','pending'))" 2>/dev/null)"
+    if [ "$STATUS" = "answered" ]; then
+      # Write the answer JSON to stderr — Claude Code sends this to Claude as the tool result.
+      # Exit 2 suppresses the terminal UI entirely (same mechanism as approval denial).
+      echo "$STATUS_RESP" | python3 -c "
+import sys, json
+d = json.load(sys.stdin)
+answer = d.get('answer', {})
+sys.stderr.write(json.dumps(answer) + '\n')
+"
+      exit 2
+    fi
+    sleep 0.5
+  done
+fi
+
 [ -z "$APPROVAL_ID" ] && exit 0
 
 # Poll for approval decision

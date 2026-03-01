@@ -84,6 +84,17 @@ db.exec(`
     created_at TEXT NOT NULL DEFAULT (datetime('now')),
     answered_at TEXT
   );
+
+  CREATE TABLE IF NOT EXISTS question_requests (
+    id TEXT PRIMARY KEY,
+    session_id TEXT NOT NULL,
+    tool_use_id TEXT,
+    questions TEXT NOT NULL,
+    answer TEXT,
+    status TEXT NOT NULL DEFAULT 'pending',
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    answered_at TEXT
+  );
 `);
 
 // ─── Transaction helper ────────────────────────────────────────────────────
@@ -260,6 +271,9 @@ const _getAllNotifications = db.prepare(
 );
 const getAllNotifications = { all: () => _getAllNotifications.all() };
 
+const _deleteNotification = db.prepare(`DELETE FROM notifications WHERE id = $id`);
+const deleteNotification = { run: (id) => _deleteNotification.run({ $id: id }) };
+
 // ─── Approval Request Helpers ──────────────────────────────────────────────
 
 const _insertApprovalRequest = db.prepare(`
@@ -334,6 +348,38 @@ const _getPendingMcpRequests = db.prepare(
 );
 const getPendingMcpRequests = { all: () => _getPendingMcpRequests.all() };
 
+// ─── Question Request Helpers ──────────────────────────────────────────────
+
+const _insertQuestionRequest = db.prepare(`
+  INSERT INTO question_requests (id, session_id, tool_use_id, questions)
+  VALUES ($id, $session_id, $tool_use_id, $questions)
+`);
+const insertQuestionRequest = {
+  run: (p) => _insertQuestionRequest.run({
+    $id: p.id,
+    $session_id: p.session_id,
+    $tool_use_id: p.tool_use_id || null,
+    $questions: p.questions,
+  }),
+};
+
+const _getQuestionRequest = db.prepare(`SELECT * FROM question_requests WHERE id = $id`);
+const getQuestionRequest = { get: (id) => _getQuestionRequest.get({ $id: id }) };
+
+const _resolveQuestionRequest = db.prepare(`
+  UPDATE question_requests
+  SET answer = $answer, status = 'answered', answered_at = datetime('now')
+  WHERE id = $id
+`);
+const resolveQuestionRequest = {
+  run: (p) => _resolveQuestionRequest.run({ $id: p.id, $answer: p.answer }),
+};
+
+const _getPendingQuestionRequests = db.prepare(
+  `SELECT * FROM question_requests WHERE status = 'pending' ORDER BY created_at DESC`
+);
+const getPendingQuestionRequests = { all: () => _getPendingQuestionRequests.all() };
+
 // ─── Full state for initial load ───────────────────────────────────────────
 
 function getFullState() {
@@ -348,6 +394,7 @@ function getFullState() {
     notifications: getAllNotifications.all(),
     pendingApprovals: getPendingApprovals.all(),
     pendingMcpRequests: getPendingMcpRequests.all(),
+    pendingQuestions: getPendingQuestionRequests.all(),
   };
 }
 
@@ -371,6 +418,7 @@ module.exports = {
   getTodosForSession,
   insertNotification,
   markNotificationRead,
+  deleteNotification,
   getUnreadNotifications,
   getAllNotifications,
   insertApprovalRequest,
@@ -382,5 +430,9 @@ module.exports = {
   resolveMcpRequest,
   timeoutMcpRequest,
   getPendingMcpRequests,
+  insertQuestionRequest,
+  getQuestionRequest,
+  resolveQuestionRequest,
+  getPendingQuestionRequests,
   getFullState,
 };

@@ -6,6 +6,7 @@ import SessionDetail from './components/SessionDetail.jsx';
 import NotificationPanel from './components/NotificationPanel.jsx';
 import ApprovalModal from './components/ApprovalModal.jsx';
 import UserInputModal from './components/UserInputModal.jsx';
+import AskUserQuestionModal from './components/AskUserQuestionModal.jsx';
 
 // ─── State ─────────────────────────────────────────────────────────────────
 
@@ -14,6 +15,7 @@ const initialState = {
   notifications: [],
   pendingApprovals: [],
   pendingMcpRequests: [],
+  pendingQuestions: [],
   connected: false,
 };
 
@@ -26,6 +28,10 @@ function reducer(state, action) {
         notifications: action.payload.notifications || [],
         pendingApprovals: action.payload.pendingApprovals || [],
         pendingMcpRequests: action.payload.pendingMcpRequests || [],
+        pendingQuestions: (action.payload.pendingQuestions || []).map(q => ({
+          ...q,
+          questions: typeof q.questions === 'string' ? JSON.parse(q.questions) : q.questions,
+        })),
       };
 
     case 'SESSION_NEW': {
@@ -107,6 +113,12 @@ function reducer(state, action) {
         ),
       };
 
+    case 'NOTIFICATION_DELETED':
+      return {
+        ...state,
+        notifications: state.notifications.filter(n => n.id !== action.payload.id),
+      };
+
     case 'APPROVAL_REQUESTED':
       return {
         ...state,
@@ -129,6 +141,18 @@ function reducer(state, action) {
       return {
         ...state,
         pendingMcpRequests: state.pendingMcpRequests.filter(r => r.id !== action.payload.id),
+      };
+
+    case 'QUESTION_REQUESTED':
+      return {
+        ...state,
+        pendingQuestions: [action.payload, ...state.pendingQuestions],
+      };
+
+    case 'QUESTION_RESOLVED':
+      return {
+        ...state,
+        pendingQuestions: state.pendingQuestions.filter(q => q.id !== action.payload.id),
       };
 
     case 'CONNECTED':
@@ -163,10 +187,13 @@ export default function App() {
     socket.on('tool:end', (data) => dispatch({ type: 'TOOL_END', payload: data }));
     socket.on('notification:new', (data) => dispatch({ type: 'NOTIFICATION_NEW', payload: data }));
     socket.on('notification:read', (data) => dispatch({ type: 'NOTIFICATION_READ', payload: data }));
+    socket.on('notification:deleted', (data) => dispatch({ type: 'NOTIFICATION_DELETED', payload: data }));
     socket.on('approval:requested', (data) => dispatch({ type: 'APPROVAL_REQUESTED', payload: data }));
     socket.on('approval:resolved', (data) => dispatch({ type: 'APPROVAL_RESOLVED', payload: data }));
     socket.on('user_input:requested', (data) => dispatch({ type: 'USER_INPUT_REQUESTED', payload: data }));
     socket.on('user_input:resolved', (data) => dispatch({ type: 'USER_INPUT_RESOLVED', payload: data }));
+    socket.on('question:requested', (data) => dispatch({ type: 'QUESTION_REQUESTED', payload: data }));
+    socket.on('question:resolved', (data) => dispatch({ type: 'QUESTION_RESOLVED', payload: data }));
 
     return () => {
       socket.off('connect');
@@ -180,10 +207,13 @@ export default function App() {
       socket.off('tool:end');
       socket.off('notification:new');
       socket.off('notification:read');
+      socket.off('notification:deleted');
       socket.off('approval:requested');
       socket.off('approval:resolved');
       socket.off('user_input:requested');
       socket.off('user_input:resolved');
+      socket.off('question:requested');
+      socket.off('question:resolved');
     };
   }, []);
 
@@ -219,6 +249,19 @@ export default function App() {
     }
   }, []);
 
+  const handleQuestionAnswer = useCallback(async (questionId, answer) => {
+    if (!answer) return; // dismissed
+    try {
+      await fetch(`/api/questions/${questionId}/answer`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ answer }),
+      });
+    } catch (err) {
+      console.error('Failed to submit question answer:', err);
+    }
+  }, []);
+
   const handleMarkRead = useCallback(async (notificationId) => {
     try {
       await fetch(`/api/notifications/${notificationId}/read`, { method: 'POST' });
@@ -227,10 +270,19 @@ export default function App() {
     }
   }, []);
 
+  const handleDeleteNotification = useCallback(async (notificationId) => {
+    try {
+      await fetch(`/api/notifications/${notificationId}`, { method: 'DELETE' });
+    } catch (err) {
+      console.error('Failed to delete notification:', err);
+    }
+  }, []);
+
   const activeSessions = state.sessions.filter(s => s.status !== 'ended');
   const unreadCount = state.notifications.filter(n => !n.read_at).length;
   const pendingApproval = state.pendingApprovals[0] || null;
   const pendingMcpRequest = state.pendingMcpRequests[0] || null;
+  const pendingQuestion = state.pendingQuestions[0] || null;
 
   return (
     <div className="min-h-screen bg-[#0d1117] text-[#e6edf3]">
@@ -249,6 +301,7 @@ export default function App() {
             notifications={state.notifications}
             sessions={state.sessions}
             onMarkRead={handleMarkRead}
+            onDelete={handleDeleteNotification}
             onClose={() => setShowNotifications(false)}
           />
         )}
@@ -308,7 +361,7 @@ export default function App() {
       )}
 
       {/* Approval modal — shown for first pending approval */}
-      {pendingApproval && !pendingMcpRequest && (
+      {pendingApproval && !pendingMcpRequest && !pendingQuestion && (
         <ApprovalModal
           approval={pendingApproval}
           session={state.sessions.find(s => s.id === pendingApproval.session_id)}
@@ -318,11 +371,20 @@ export default function App() {
       )}
 
       {/* MCP user input modal */}
-      {pendingMcpRequest && (
+      {pendingMcpRequest && !pendingQuestion && (
         <UserInputModal
           request={pendingMcpRequest}
           session={state.sessions.find(s => s.id === pendingMcpRequest.session_id)}
           onSubmit={(response) => handleMcpRespond(pendingMcpRequest.id, response)}
+        />
+      )}
+
+      {/* AskUserQuestion modal — shown for first pending question */}
+      {pendingQuestion && (
+        <AskUserQuestionModal
+          request={pendingQuestion}
+          session={state.sessions.find(s => s.id === pendingQuestion.session_id)}
+          onSubmit={(answer) => handleQuestionAnswer(pendingQuestion.id, answer)}
         />
       )}
     </div>

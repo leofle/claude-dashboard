@@ -1,5 +1,5 @@
 import React from 'react';
-import { X, Bell, CheckCheck } from 'lucide-react';
+import { X, Bell, CheckCheck, Trash2 } from 'lucide-react';
 
 function typeStyle(type) {
   switch (type) {
@@ -15,7 +15,7 @@ function formatTime(ts) {
   return new Date(ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 }
 
-export default function NotificationPanel({ notifications, sessions, onMarkRead, onClose }) {
+export default function NotificationPanel({ notifications, sessions, onMarkRead, onDelete, onClose }) {
   const unread = notifications.filter(n => !n.read_at);
   const read = notifications.filter(n => n.read_at);
 
@@ -70,15 +70,24 @@ export default function NotificationPanel({ notifications, sessions, onMarkRead,
                 <span>{formatTime(n.created_at)}</span>
               </div>
             </div>
-            {!n.read_at && (
+            <div className="flex-shrink-0 flex items-center gap-0.5 mt-0.5">
+              {!n.read_at && (
+                <button
+                  onClick={() => onMarkRead(n.id)}
+                  className="p-1 rounded hover:bg-[#30363d] text-[#8b949e] hover:text-[#3fb950] transition-colors"
+                  title="Mark as read"
+                >
+                  <CheckCheck size={13} />
+                </button>
+              )}
               <button
-                onClick={() => onMarkRead(n.id)}
-                className="flex-shrink-0 p-1 rounded hover:bg-[#30363d] text-[#8b949e] hover:text-[#3fb950] transition-colors mt-0.5"
-                title="Mark as read"
+                onClick={() => onDelete(n.id)}
+                className="p-1 rounded hover:bg-[#30363d] text-[#8b949e] hover:text-[#f85149] transition-colors"
+                title="Delete"
               >
-                <CheckCheck size={13} />
+                <Trash2 size={13} />
               </button>
-            )}
+            </div>
           </div>
         ))}
       </div>

@@ -23,6 +23,7 @@ const {
   insertNotification,
   insertApprovalRequest,
   getApprovalRequest,
+  insertQuestionRequest,
 } = require('../db');
 
 function getIo(req) {
@@ -61,7 +62,7 @@ router.post('/session-start', (req, res) => {
 
 // ─── POST /hooks/pre-tool-use ──────────────────────────────────────────────
 
-router.post('/pre-tool-use', async (req, res) => {
+router.post('/pre-tool-use', (req, res) => {
   // Claude Code sends: { session_id, cwd, tool_name, tool_input, tool_use_id, ... }
   const { session_id, tool_name, tool_input, tool_use_id, cwd } = req.body;
   if (!session_id || !tool_name) return res.json({});
@@ -81,12 +82,37 @@ router.post('/pre-tool-use', async (req, res) => {
   io.emit('session:updated', getSession.get(session_id));
   io.emit('tool:start', { session_id, tool_name, tool_input, tool_use_id });
 
+  // Intercept AskUserQuestion — route it through the dashboard UI
+  if (tool_name === 'AskUserQuestion') {
+    const question_id = uuidv4();
+    const questions = tool_input?.questions || [];
+
+    insertQuestionRequest.run({
+      id: question_id,
+      session_id,
+      tool_use_id: tool_use_id || null,
+      questions: JSON.stringify(questions),
+    });
+
+    io.emit('question:requested', {
+      id: question_id,
+      session_id,
+      tool_use_id,
+      questions,
+      created_at: new Date().toISOString(),
+    });
+
+    console.log(`[hook] AskUserQuestion: question request (${question_id}) for ${session_id}`);
+    return res.json({ question_id });
+  }
+
   // Check if this tool requires approval
   if (!APPROVAL_TOOLS.includes(tool_name)) {
     return res.json({});
   }
 
-  // Requires approval — insert request and long-poll
+  // Requires approval — insert request and return approval_id immediately.
+  // The bash hook script will poll /api/approvals/:id/status separately.
   const approval_id = uuidv4();
   insertApprovalRequest.run({
     id: approval_id,
@@ -105,50 +131,10 @@ router.post('/pre-tool-use', async (req, res) => {
     created_at: new Date().toISOString(),
   });
 
-  console.log(`[hook] pre-tool-use: waiting for approval (${approval_id}) for ${tool_name}`);
+  console.log(`[hook] pre-tool-use: approval requested (${approval_id}) for ${tool_name}`);
 
-  // Long-poll until approved/denied or timeout
-  const deadline = Date.now() + APPROVAL_TIMEOUT_MS;
-  const POLL_INTERVAL = 500;
-
-  // Handle client disconnect
-  let resolved = false;
-  res.on('close', () => { resolved = true; });
-
-  await new Promise(resolve => {
-    function poll() {
-      if (resolved) return resolve();
-
-      const row = getApprovalRequest.get(approval_id);
-      if (row && row.status === 'approved') {
-        resolved = true;
-        // Allow: return empty JSON
-        res.json({});
-        return resolve();
-      }
-      if (row && row.status === 'denied') {
-        resolved = true;
-        // Deny: use hookSpecificOutput format
-        res.json({
-          hookSpecificOutput: {
-            hookEventName: 'PreToolUse',
-            permissionDecision: 'deny',
-            permissionDecisionReason: row.deny_reason || 'Denied via Claude Dashboard',
-          },
-        });
-        return resolve();
-      }
-      if (Date.now() >= deadline) {
-        resolved = true;
-        // Timeout — allow by default (never block Claude indefinitely)
-        console.log(`[hook] pre-tool-use: approval timed out, allowing (${approval_id})`);
-        res.json({});
-        return resolve();
-      }
-      setTimeout(poll, POLL_INTERVAL);
-    }
-    setTimeout(poll, POLL_INTERVAL);
-  });
+  // Return approval_id immediately — bash script polls /api/approvals/:id/status
+  res.json({ approval_id });
 });
 
 // ─── POST /hooks/post-tool-use ─────────────────────────────────────────────

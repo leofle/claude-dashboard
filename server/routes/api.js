@@ -12,6 +12,7 @@ const {
   getTodosForSession,
   getAllNotifications,
   markNotificationRead,
+  deleteNotification,
   clearPendingNotifications,
   getPendingApprovals,
   getApprovalRequest,
@@ -21,6 +22,9 @@ const {
   insertMcpRequest,
   resolveMcpRequest,
   timeoutMcpRequest,
+  getPendingQuestionRequests,
+  getQuestionRequest,
+  resolveQuestionRequest,
   getFullState,
 } = require('../db');
 
@@ -71,6 +75,13 @@ router.post('/notifications/:id/read', (req, res) => {
   res.json({ ok: true });
 });
 
+router.delete('/notifications/:id', (req, res) => {
+  deleteNotification.run(req.params.id);
+  const io = getIo(req);
+  io.emit('notification:deleted', { id: parseInt(req.params.id) });
+  res.json({ ok: true });
+});
+
 router.post('/notifications/read-all', (req, res) => {
   const { session_id } = req.body;
   if (session_id) {
@@ -117,6 +128,37 @@ router.post('/approvals/:id/resolve', (req, res) => {
 
   console.log(`[api] approval ${req.params.id} ${status}`);
   res.json({ ok: true, status });
+});
+
+// ─── Question Requests (AskUserQuestion interception) ──────────────────────
+
+router.get('/questions/:id/status', (req, res) => {
+  const q = getQuestionRequest.get(req.params.id);
+  if (!q) return res.status(404).json({ error: 'Not found' });
+  let answer = null;
+  if (q.answer) {
+    try { answer = JSON.parse(q.answer); } catch { answer = q.answer; }
+  }
+  res.json({ status: q.status, answer });
+});
+
+router.post('/questions/:id/answer', (req, res) => {
+  const { answer } = req.body;
+  const q = getQuestionRequest.get(req.params.id);
+  if (!q) return res.status(404).json({ error: 'Not found' });
+  if (q.status !== 'pending') return res.status(409).json({ error: 'Already answered' });
+
+  resolveQuestionRequest.run({ id: req.params.id, answer: JSON.stringify(answer) });
+
+  const io = getIo(req);
+  io.emit('question:resolved', {
+    id: req.params.id,
+    session_id: q.session_id,
+    answer,
+  });
+
+  console.log(`[api] question ${req.params.id} answered`);
+  res.json({ ok: true });
 });
 
 // ─── MCP Requests ──────────────────────────────────────────────────────────
