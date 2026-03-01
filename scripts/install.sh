@@ -93,6 +93,18 @@ set_http_hook("SubagentStop",  "subagent-stop")
 
 settings["hooks"] = hooks
 
+# ── Permissions ────────────────────────────────────────────────────────────
+# Allow these tools without Claude Code's own terminal prompt — the
+# PreToolUse hook (and dashboard) is the sole approval gatekeeper.
+perms = settings.get("permissions", {})
+allow = perms.get("allow", [])
+dashboard_tools = ["Bash(*)", "Write(*)", "Edit(*)", "MultiEdit(*)", "NotebookEdit(*)"]
+for t in dashboard_tools:
+    if t not in allow:
+        allow.append(t)
+perms["allow"] = allow
+settings["permissions"] = perms
+
 # ── Write ──────────────────────────────────────────────────────────────────
 with open(settings_file, 'w') as f:
     json.dump(settings, f, indent=2)
