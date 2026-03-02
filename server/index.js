@@ -3,7 +3,9 @@ const express = require('express');
 const http = require('http');
 const { Server } = require('socket.io');
 const path = require('path');
-const { getFullState } = require('./db');
+const { getFullState, upsertSession, getSession } = require('./db');
+const { startWatching } = require('./transcript-watcher');
+const sessionScanner = require('./session-scanner');
 
 const PORT = parseInt(process.env.PORT || '4321', 10);
 
@@ -67,6 +69,7 @@ io.on('connection', (socket) => {
 
 httpServer.listen(PORT, () => {
   console.log(`Claude Dashboard server running on http://localhost:${PORT}`);
+  sessionScanner.start({ upsertSession, getSession, startWatching, io });
 });
 
 module.exports = { app, io };

@@ -1,11 +1,15 @@
 const express = require('express');
 const { v4: uuidv4 } = require('uuid');
 const router = express.Router();
+const sessionScanner = require('../session-scanner');
 
 const MCP_TIMEOUT_MS = parseInt(process.env.MCP_TIMEOUT || '300', 10) * 1000;
 
+const { startWatching } = require('../transcript-watcher');
+
 const {
   getSession,
+  upsertSession,
   getAllSessions,
   getActiveSessions,
   getRecentToolEvents,
@@ -37,6 +41,7 @@ function getIo(req) {
 
 router.post('/sessions/refresh', (req, res) => {
   const io = getIo(req);
+  sessionScanner.scanExisting({ upsertSession, getSession, startWatching, io });
   const state = getFullState();
   io.emit('initial:state', state);
   res.json({ ok: true, sessions: state.sessions.length });
