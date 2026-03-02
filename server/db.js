@@ -119,6 +119,18 @@ try { db.exec(`ALTER TABLE sessions ADD COLUMN transcript_path TEXT`); } catch {
 // Migration: add pid and spawned columns for dashboard-launched sessions
 try { db.exec(`ALTER TABLE sessions ADD COLUMN pid INTEGER`); } catch {}
 try { db.exec(`ALTER TABLE sessions ADD COLUMN spawned INTEGER DEFAULT 0`); } catch {}
+// Migration: add nickname column for custom session labels
+try { db.exec(`ALTER TABLE sessions ADD COLUMN nickname TEXT`); } catch {}
+
+// Push subscriptions table
+db.exec(`
+  CREATE TABLE IF NOT EXISTS push_subscriptions (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    endpoint TEXT UNIQUE NOT NULL,
+    subscription TEXT NOT NULL,
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+  );
+`);
 
 // ─── Transaction helper ────────────────────────────────────────────────────
 
@@ -170,6 +182,28 @@ const updateSessionPid = {
 
 const _getSessionPid = db.prepare(`SELECT pid FROM sessions WHERE id = $id`);
 const getSessionPid = { get: (id) => _getSessionPid.get({ $id: id }) };
+
+const _updateNickname = db.prepare(`UPDATE sessions SET nickname = $nickname WHERE id = $id`);
+const updateNickname = {
+  run: (p) => _updateNickname.run({ $id: p.id, $nickname: p.nickname ?? null }),
+};
+
+// ─── Push Subscription Helpers ─────────────────────────────────────────────
+
+const _insertPushSub = db.prepare(
+  `INSERT OR REPLACE INTO push_subscriptions (endpoint, subscription) VALUES ($endpoint, $subscription)`
+);
+const insertPushSubscription = {
+  run: (p) => _insertPushSub.run({ $endpoint: p.endpoint, $subscription: p.subscription }),
+};
+
+const _deletePushSub = db.prepare(`DELETE FROM push_subscriptions WHERE endpoint = $endpoint`);
+const deletePushSubscription = {
+  run: (endpoint) => _deletePushSub.run({ $endpoint: endpoint }),
+};
+
+const _getAllPushSubs = db.prepare(`SELECT endpoint, subscription FROM push_subscriptions`);
+const getAllPushSubscriptions = { all: () => _getAllPushSubs.all() };
 
 const _getSession = db.prepare(`SELECT * FROM sessions WHERE id = $id`);
 const getSession = { get: (id) => _getSession.get({ $id: id }) };
@@ -522,6 +556,10 @@ module.exports = {
   updateTranscriptPath,
   updateSessionPid,
   getSessionPid,
+  updateNickname,
+  insertPushSubscription,
+  deletePushSubscription,
+  getAllPushSubscriptions,
   insertTranscriptEntry,
   getTranscriptEntries,
   insertPendingCommand,

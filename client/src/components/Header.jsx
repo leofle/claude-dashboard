@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
-import { Bell, CheckSquare, Plus, RefreshCw, Wifi, WifiOff } from 'lucide-react';
+import { Bell, BellOff, BellDot, CheckSquare, Plus, RefreshCw, Wifi, WifiOff } from 'lucide-react';
 import LaunchSessionModal from './LaunchSessionModal.jsx';
+import { usePushNotifications } from '../hooks/usePushNotifications.js';
 
 export default function Header({
   connected,
@@ -11,6 +12,7 @@ export default function Header({
 }) {
   const [refreshing, setRefreshing] = useState(false);
   const [showLaunch, setShowLaunch] = useState(false);
+  const { supported: pushSupported, enabled: pushEnabled, loading: pushLoading, toggle: togglePush } = usePushNotifications();
 
   async function handleRefresh() {
     setRefreshing(true);
@@ -59,7 +61,23 @@ export default function Header({
               </div>
             )}
 
-            {/* Notifications */}
+            {/* Push notifications toggle */}
+            {pushSupported && (
+              <button
+                onClick={togglePush}
+                disabled={pushLoading}
+                title={pushEnabled ? 'Push notifications on — click to disable' : 'Enable push notifications'}
+                className={`p-2 rounded-md transition-colors disabled:opacity-50 ${
+                  pushEnabled
+                    ? 'text-[#3fb950] hover:bg-[#1c2128]'
+                    : 'text-[#484f58] hover:text-[#8b949e] hover:bg-[#1c2128]'
+                }`}
+              >
+                {pushEnabled ? <BellDot size={15} /> : <BellOff size={15} />}
+              </button>
+            )}
+
+            {/* In-app notifications panel */}
             <button
               onClick={onNotificationsClick}
               title="Notifications"

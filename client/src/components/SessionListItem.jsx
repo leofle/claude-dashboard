@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { Square } from 'lucide-react';
+import React, { useState, useRef, useEffect } from 'react';
+import { Square, Pencil } from 'lucide-react';
 
 function statusColor(status, isWaiting) {
   if (isWaiting) return '#d29922';
@@ -18,6 +18,9 @@ function statusLabel(status, isWaiting) {
 
 export default function SessionListItem({ session, isWaiting, selected, onSelect }) {
   const [killing, setKilling] = useState(false);
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState('');
+  const inputRef = useRef(null);
   const color = statusColor(session.status, isWaiting);
   const label = statusLabel(session.status, isWaiting);
 
@@ -25,10 +28,39 @@ export default function SessionListItem({ session, isWaiting, selected, onSelect
     ? session.cwd.split('/').filter(Boolean).pop()
     : (session.id?.slice(0, 8) ?? '????????');
 
+  const displayName = session.nickname || folderName;
+
   const canKill = !!session.spawned && session.status !== 'ended';
   const todos = session.todos || [];
   const doneTodos = todos.filter(t => t.status === 'completed').length;
   const pct = todos.length ? Math.round((doneTodos / todos.length) * 100) : 0;
+
+  function startEdit(e) {
+    e.stopPropagation();
+    setDraft(session.nickname || '');
+    setEditing(true);
+  }
+
+  async function saveNickname() {
+    setEditing(false);
+    const nickname = draft.trim() || null;
+    if (nickname === (session.nickname ?? null)) return;
+    await fetch(`/api/sessions/${session.id}/nickname`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ nickname }),
+    });
+  }
+
+  function handleInputKey(e) {
+    e.stopPropagation();
+    if (e.key === 'Enter') saveNickname();
+    if (e.key === 'Escape') setEditing(false);
+  }
+
+  useEffect(() => {
+    if (editing) inputRef.current?.focus();
+  }, [editing]);
 
   async function handleKill(e) {
     e.stopPropagation();
@@ -55,7 +87,7 @@ export default function SessionListItem({ session, isWaiting, selected, onSelect
     >
       {/* Main row: dot + name + status */}
       <div className="flex items-center justify-between gap-2">
-        <div className="flex items-center gap-2 min-w-0">
+        <div className="flex items-center gap-1.5 min-w-0">
           <span
             className="w-1.5 h-1.5 rounded-full flex-shrink-0"
             style={{
@@ -63,7 +95,29 @@ export default function SessionListItem({ session, isWaiting, selected, onSelect
               boxShadow: (session.status === 'active' || isWaiting) ? `0 0 5px ${color}` : 'none',
             }}
           />
-          <span className="text-sm font-medium truncate">{folderName}</span>
+          {editing ? (
+            <input
+              ref={inputRef}
+              value={draft}
+              onChange={e => setDraft(e.target.value)}
+              onBlur={saveNickname}
+              onKeyDown={handleInputKey}
+              onClick={e => e.stopPropagation()}
+              placeholder={folderName}
+              className="flex-1 min-w-0 bg-transparent border-b border-[#58a6ff] text-sm text-[#e6edf3] outline-none placeholder-[#484f58]"
+            />
+          ) : (
+            <span className="text-sm font-medium truncate">{displayName}</span>
+          )}
+          {!editing && (
+            <button
+              onClick={startEdit}
+              title="Rename"
+              className="opacity-0 group-hover:opacity-100 p-0.5 rounded text-[#484f58] hover:text-[#8b949e] transition-all flex-shrink-0"
+            >
+              <Pencil size={9} />
+            </button>
+          )}
         </div>
         <div className="flex items-center gap-1.5 flex-shrink-0">
           {canKill && (

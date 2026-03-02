@@ -28,11 +28,19 @@ const {
   deletePendingCommand,
   updateTranscriptPath,
   updateSessionPid,
+  getAllPushSubscriptions,
+  deletePushSubscription,
 } = require('../db');
 
 const { pendingSpawns } = require('../spawned-sessions');
+const { push } = require('../push');
+const { getAllPushSubscriptions, deletePushSubscription } = require('../db');
 
 const { startWatching, stopWatching } = require('../transcript-watcher');
+
+function sendPush(payload) {
+  push(() => getAllPushSubscriptions.all(), (ep) => deletePushSubscription.run(ep), payload);
+}
 
 function getIo(req) {
   return req.app.get('io');
@@ -134,6 +142,10 @@ router.post('/pre-tool-use', (req, res) => {
       created_at: new Date().toISOString(),
     });
 
+    const qSession = getSession.get(session_id);
+    const qLabel = qSession?.nickname || qSession?.cwd?.split('/').pop() || session_id.slice(0, 8);
+    sendPush({ title: '❓ Claude needs input', body: qLabel, tag: `question-${question_id}` });
+
     console.log(`[hook] AskUserQuestion: question request (${question_id}) for ${session_id}`);
     return res.json({ question_id });
   }
@@ -162,6 +174,10 @@ router.post('/pre-tool-use', (req, res) => {
     tool_use_id,
     created_at: new Date().toISOString(),
   });
+
+  const aSession = getSession.get(session_id);
+  const aLabel = aSession?.nickname || aSession?.cwd?.split('/').pop() || session_id.slice(0, 8);
+  sendPush({ title: `🔐 Approval: ${tool_name}`, body: aLabel, tag: `approval-${approval_id}` });
 
   console.log(`[hook] pre-tool-use: approval requested (${approval_id}) for ${tool_name}`);
 
@@ -244,12 +260,19 @@ router.post('/stop', (req, res) => {
   const { session_id } = req.body;
   if (!session_id) return res.json({});
 
+  const stoppingSession = getSession.get(session_id);
   endSession.run(session_id);
   stopWatching(session_id);
 
   const io = getIo(req);
   io.emit('session:ended', { session_id, ended_at: new Date().toISOString() });
   io.emit('session:updated', getSession.get(session_id));
+
+  // Push only for main agent sessions (not sub-agents)
+  if (stoppingSession?.agent_type !== 'subagent') {
+    const label = stoppingSession?.nickname || stoppingSession?.cwd?.split('/').pop() || session_id.slice(0, 8);
+    sendPush({ title: '✅ Session done', body: label, tag: `done-${session_id}` });
+  }
 
   console.log(`[hook] stop: ${session_id}`);
   res.json({});

@@ -1,5 +1,5 @@
-import React, { useEffect, useState } from 'react';
-import { X, Terminal, Clock, GitBranch, Square, GitFork } from 'lucide-react';
+import React, { useEffect, useRef, useState } from 'react';
+import { X, Terminal, Clock, GitBranch, Square, GitFork, Pencil } from 'lucide-react';
 import TodoList from './TodoList.jsx';
 import ActivityLog from './ActivityLog.jsx';
 import SubAgentTree from './SubAgentTree.jsx';
@@ -53,7 +53,36 @@ export default function SessionDetail({ session, allSessions, isWaiting, onClose
   const color = statusColor(session.status, isWaiting);
   const [killing, setKilling] = useState(false);
   const [forking, setForking] = useState(false);
+  const [editingName, setEditingName] = useState(false);
+  const [nameDraft, setNameDraft] = useState('');
+  const nameInputRef = useRef(null);
   const canKill = !!session.spawned && session.status !== 'ended';
+
+  const folderName = session.cwd?.split('/').filter(Boolean).pop() ?? session.id?.slice(0, 8);
+  const displayName = session.nickname || folderName;
+
+  function startEditName(e) {
+    e.stopPropagation();
+    setNameDraft(session.nickname || '');
+    setEditingName(true);
+    setTimeout(() => nameInputRef.current?.focus(), 0);
+  }
+
+  async function saveNickname() {
+    setEditingName(false);
+    const nickname = nameDraft.trim() || null;
+    if (nickname === (session.nickname ?? null)) return;
+    await fetch(`/api/sessions/${session.id}/nickname`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ nickname }),
+    });
+  }
+
+  function handleNameKey(e) {
+    if (e.key === 'Enter') saveNickname();
+    if (e.key === 'Escape') setEditingName(false);
+  }
 
   // Escape to close
   useEffect(() => {
@@ -103,7 +132,31 @@ export default function SessionDetail({ session, allSessions, isWaiting, onClose
             }}
           />
           <div className="min-w-0">
-            <div className="font-mono text-sm text-[#e6edf3] truncate leading-tight">{session.id}</div>
+            {/* Editable nickname / folder name */}
+            <div className="flex items-center gap-1.5 group/name">
+              {editingName ? (
+                <input
+                  ref={nameInputRef}
+                  value={nameDraft}
+                  onChange={e => setNameDraft(e.target.value)}
+                  onBlur={saveNickname}
+                  onKeyDown={handleNameKey}
+                  placeholder={folderName}
+                  className="bg-transparent border-b border-[#58a6ff] text-sm font-medium text-[#e6edf3] outline-none placeholder-[#484f58] w-48"
+                />
+              ) : (
+                <>
+                  <span className="text-sm font-semibold text-[#e6edf3] truncate">{displayName}</span>
+                  <button
+                    onClick={startEditName}
+                    title="Rename session"
+                    className="opacity-0 group-hover/name:opacity-100 p-0.5 rounded text-[#484f58] hover:text-[#8b949e] transition-all flex-shrink-0"
+                  >
+                    <Pencil size={10} />
+                  </button>
+                </>
+              )}
+            </div>
             {session.cwd && (
               <div className="flex items-center gap-1 text-[11px] text-[#8b949e] truncate mt-0.5">
                 <Terminal size={10} />

@@ -349,7 +349,12 @@ export default function App() {
     { key: 'ended', label: 'Ended' },
   ];
 
-  const visibleActive = filteredSessions.filter(s => s.status !== 'ended');
+  const visibleActive = filteredSessions
+    .filter(s => s.status !== 'ended')
+    .sort((a, b) => {
+      const rank = s => waitingSessionIds.has(s.id) ? 0 : s.status === 'active' ? 1 : 2;
+      return rank(a) - rank(b);
+    });
   const visibleEnded = filteredSessions.filter(s => s.status === 'ended');
 
   return (

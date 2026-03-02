@@ -6,6 +6,7 @@ const { spawn, execFileSync } = require('child_process');
 const router = express.Router();
 const sessionScanner = require('../session-scanner');
 const { pendingSpawns, spawnedChildren } = require('../spawned-sessions');
+const { vapidPublicKey, push } = require('../push');
 
 const MCP_TIMEOUT_MS = parseInt(process.env.MCP_TIMEOUT || '300', 10) * 1000;
 
@@ -37,7 +38,15 @@ const {
   getFullState,
   endSession,
   getSessionPid,
+  updateNickname,
+  insertPushSubscription,
+  deletePushSubscription,
+  getAllPushSubscriptions,
 } = require('../db');
+
+function sendPush(payload) {
+  push(() => getAllPushSubscriptions.all(), (ep) => deletePushSubscription.run(ep), payload);
+}
 
 function getIo(req) {
   return req.app.get('io');
@@ -246,6 +255,12 @@ router.post('/mcp/tool', async (req, res) => {
       created_at: new Date().toISOString(),
     });
 
+    sendPush({
+      title: '💬 Claude needs input',
+      body: message.slice(0, 100),
+      tag: `input-${id}`,
+    });
+
     console.log(`[api] mcp request_user_input (${id}): "${message}"`);
 
     // Poll for answer
@@ -374,6 +389,43 @@ router.post('/sessions/:id/command', (req, res) => {
   if (!message?.trim()) return res.status(400).json({ error: 'message required' });
   insertPendingCommand.run({ id: uuidv4(), session_id: req.params.id, message: message.trim() });
   console.log(`[api] command queued for ${req.params.id}: "${message.trim()}"`);
+  res.json({ ok: true });
+});
+
+// ─── Session Nickname ──────────────────────────────────────────────────────
+
+router.patch('/sessions/:id/nickname', (req, res) => {
+  const session = getSession.get(req.params.id);
+  if (!session) return res.status(404).json({ error: 'Not found' });
+
+  const nickname = req.body.nickname?.trim() || null;
+  updateNickname.run({ id: req.params.id, nickname });
+
+  const io = getIo(req);
+  io.emit('session:updated', getSession.get(req.params.id));
+
+  console.log(`[api] nickname set for ${req.params.id}: ${nickname}`);
+  res.json({ ok: true });
+});
+
+// ─── Push Notifications ────────────────────────────────────────────────────
+
+router.get('/push/vapid-key', (req, res) => {
+  res.json({ publicKey: vapidPublicKey });
+});
+
+router.post('/push/subscribe', (req, res) => {
+  const sub = req.body;
+  if (!sub?.endpoint) return res.status(400).json({ error: 'Invalid subscription' });
+  insertPushSubscription.run({ endpoint: sub.endpoint, subscription: JSON.stringify(sub) });
+  console.log(`[api] push subscription saved`);
+  res.json({ ok: true });
+});
+
+router.post('/push/unsubscribe', (req, res) => {
+  const { endpoint } = req.body;
+  if (!endpoint) return res.status(400).json({ error: 'endpoint required' });
+  deletePushSubscription.run(endpoint);
   res.json({ ok: true });
 });
 

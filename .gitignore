@@ -8,3 +8,4 @@ client/dist/
 *.db-shm
 .env
 .DS_Store
+server/.vapid-keys.json
