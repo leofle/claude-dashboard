@@ -105,6 +105,13 @@ db.exec(`
     timestamp TEXT,
     created_at TEXT NOT NULL DEFAULT (datetime('now'))
   );
+
+  CREATE TABLE IF NOT EXISTS pending_commands (
+    id TEXT PRIMARY KEY,
+    session_id TEXT NOT NULL,
+    message TEXT NOT NULL,
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+  );
 `);
 
 // Migration: add transcript_path column to sessions if it doesn't exist yet
@@ -427,6 +434,23 @@ const getTranscriptEntries = {
   })),
 };
 
+// ─── Pending Commands ──────────────────────────────────────────────────────
+
+const _insertPendingCommand = db.prepare(
+  `INSERT INTO pending_commands (id, session_id, message) VALUES ($id, $session_id, $message)`
+);
+const insertPendingCommand = {
+  run: (p) => _insertPendingCommand.run({ $id: p.id, $session_id: p.session_id, $message: p.message }),
+};
+
+const _getPendingCommand = db.prepare(
+  `SELECT * FROM pending_commands WHERE session_id = $session_id ORDER BY created_at ASC LIMIT 1`
+);
+const getPendingCommand = { get: (session_id) => _getPendingCommand.get({ $session_id: session_id }) };
+
+const _deletePendingCommand = db.prepare(`DELETE FROM pending_commands WHERE id = $id`);
+const deletePendingCommand = { run: (id) => _deletePendingCommand.run({ $id: id }) };
+
 // ─── Full state for initial load ───────────────────────────────────────────
 
 function getFullState() {
@@ -485,5 +509,8 @@ module.exports = {
   updateTranscriptPath,
   insertTranscriptEntry,
   getTranscriptEntries,
+  insertPendingCommand,
+  getPendingCommand,
+  deletePendingCommand,
   getFullState,
 };

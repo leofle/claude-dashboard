@@ -18,6 +18,13 @@ RESPONSE="$(curl -sf -X POST "${SERVER}/hooks/pre-tool-use" \
 
 APPROVAL_ID="$(echo "$RESPONSE" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('approval_id',''))" 2>/dev/null)"
 QUESTION_ID="$(echo "$RESPONSE" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('question_id',''))" 2>/dev/null)"
+PENDING_CMD="$(echo "$RESPONSE" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('pending_command',''))" 2>/dev/null)"
+
+# Deliver pending dashboard command — block tool and surface message to Claude
+if [ -n "$PENDING_CMD" ]; then
+  printf "The user sent you a message from the Claude Dashboard:\n\n%s\n\nPlease address this message before continuing with what you were doing." "$PENDING_CMD" >&2
+  exit 2
+fi
 
 # Poll for AskUserQuestion answer from dashboard
 if [ -n "$QUESTION_ID" ]; then

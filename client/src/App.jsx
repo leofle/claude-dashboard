@@ -7,6 +7,7 @@ import NotificationPanel from './components/NotificationPanel.jsx';
 import ApprovalModal from './components/ApprovalModal.jsx';
 import UserInputModal from './components/UserInputModal.jsx';
 import AskUserQuestionModal from './components/AskUserQuestionModal.jsx';
+import CommandPalette from './components/CommandPalette.jsx';
 
 // ─── State ─────────────────────────────────────────────────────────────────
 
@@ -182,6 +183,7 @@ export default function App() {
   const [state, dispatch] = useReducer(reducer, initialState);
   const [selectedSession, setSelectedSession] = useState(null);
   const [showNotifications, setShowNotifications] = useState(false);
+  const [showCommandPalette, setShowCommandPalette] = useState(false);
 
   // ── Socket.IO event listeners ──
   useEffect(() => {
@@ -227,6 +229,18 @@ export default function App() {
       socket.off('question:resolved');
       socket.off('transcript:entry');
     };
+  }, []);
+
+  // Cmd+P → command palette
+  useEffect(() => {
+    const handler = (e) => {
+      if (e.key === 'p' && (e.metaKey || e.ctrlKey)) {
+        e.preventDefault();
+        setShowCommandPalette(v => !v);
+      }
+    };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
   }, []);
 
   // Keep selectedSession in sync when sessions update
@@ -397,6 +411,14 @@ export default function App() {
           request={pendingQuestion}
           session={state.sessions.find(s => s.id === pendingQuestion.session_id)}
           onSubmit={(answer) => handleQuestionAnswer(pendingQuestion.id, answer)}
+        />
+      )}
+
+      {/* Command palette — Cmd+P */}
+      {showCommandPalette && (
+        <CommandPalette
+          sessions={state.sessions}
+          onClose={() => setShowCommandPalette(false)}
         />
       )}
     </div>

@@ -24,6 +24,8 @@ const {
   insertApprovalRequest,
   getApprovalRequest,
   insertQuestionRequest,
+  getPendingCommand,
+  deletePendingCommand,
   updateTranscriptPath,
 } = require('../db');
 
@@ -90,6 +92,14 @@ router.post('/pre-tool-use', (req, res) => {
   updateSessionTool.run({ id: session_id, current_tool: tool_name });
   io.emit('session:updated', getSession.get(session_id));
   io.emit('tool:start', { session_id, tool_name, tool_input, tool_use_id });
+
+  // Deliver any pending user command before the tool runs
+  const pendingCmd = getPendingCommand.get(session_id);
+  if (pendingCmd) {
+    deletePendingCommand.run(pendingCmd.id);
+    console.log(`[hook] delivering pending command for ${session_id}: "${pendingCmd.message}"`);
+    return res.json({ pending_command: pendingCmd.message });
+  }
 
   // Intercept AskUserQuestion — route it through the dashboard UI
   if (tool_name === 'AskUserQuestion') {

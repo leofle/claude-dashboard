@@ -25,6 +25,7 @@ const {
   getPendingQuestionRequests,
   getQuestionRequest,
   resolveQuestionRequest,
+  insertPendingCommand,
   getFullState,
 } = require('../db');
 
@@ -261,6 +262,16 @@ router.post('/mcp/tool', async (req, res) => {
 
   // Unknown tool
   res.status(400).json({ error: `Unknown MCP tool: ${tool}` });
+});
+
+// ─── Pending Commands ──────────────────────────────────────────────────────
+
+router.post('/sessions/:id/command', (req, res) => {
+  const { message } = req.body;
+  if (!message?.trim()) return res.status(400).json({ error: 'message required' });
+  insertPendingCommand.run({ id: uuidv4(), session_id: req.params.id, message: message.trim() });
+  console.log(`[api] command queued for ${req.params.id}: "${message.trim()}"`);
+  res.json({ ok: true });
 });
 
 // ─── Health ────────────────────────────────────────────────────────────────

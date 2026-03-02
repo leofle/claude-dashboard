@@ -118,7 +118,7 @@ function TranscriptEntry({ entry }) {
             : 'bg-[#1c2128] text-[#adbac7] rounded-tl-sm'
         }`}>
           {entry.text && (
-            <p className="whitespace-pre-wrap break-words">{renderText(entry.text)}</p>
+            <div className="whitespace-pre-wrap break-words">{renderText(entry.text)}</div>
           )}
           {entry.tool_uses?.map((tu, i) => (
             <ToolUseBlock key={i} toolUse={tu} />
