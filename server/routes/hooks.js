@@ -78,6 +78,7 @@ router.post('/pre-tool-use', (req, res) => {
   const { session_id, tool_name, tool_input, tool_use_id, cwd } = req.body;
   if (!session_id || !tool_name) return res.json({});
 
+  const isNew = !getSession.get(session_id);
   ensureSession(session_id, { cwd });
 
   const io = getIo(req);
@@ -90,7 +91,8 @@ router.post('/pre-tool-use', (req, res) => {
     tool_use_id: tool_use_id || null,
   });
   updateSessionTool.run({ id: session_id, current_tool: tool_name });
-  io.emit('session:updated', getSession.get(session_id));
+  // Use session:new if this session wasn't registered yet so the client adds it
+  io.emit(isNew ? 'session:new' : 'session:updated', getSession.get(session_id));
   io.emit('tool:start', { session_id, tool_name, tool_input, tool_use_id });
 
   // Deliver any pending user command before the tool runs
