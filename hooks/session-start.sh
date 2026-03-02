@@ -5,9 +5,10 @@ SERVER="${CLAUDE_DASHBOARD_URL:-http://localhost:4321}"
 PAYLOAD="$(cat)"
 SESSION_ID="$(echo "$PAYLOAD" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('session_id',''))" 2>/dev/null)"
 CWD="$(echo "$PAYLOAD" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('cwd',''))" 2>/dev/null)"
+TRANSCRIPT_PATH="$(echo "$PAYLOAD" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('transcript_path',''))" 2>/dev/null)"
 [ -z "$SESSION_ID" ] && exit 0
 curl -sf -X POST "${SERVER}/hooks/session-start" \
   -H "Content-Type: application/json" \
-  -d "{\"session_id\":\"${SESSION_ID}\",\"cwd\":\"${CWD}\"}" \
+  -d "{\"session_id\":\"${SESSION_ID}\",\"cwd\":\"${CWD}\",\"transcript_path\":\"${TRANSCRIPT_PATH}\"}" \
   --max-time 5 > /dev/null 2>&1 || true
 exit 0

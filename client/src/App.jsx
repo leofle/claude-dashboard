@@ -99,6 +99,16 @@ function reducer(state, action) {
         ),
       };
 
+    case 'TRANSCRIPT_ENTRY':
+      return {
+        ...state,
+        sessions: state.sessions.map(s =>
+          s.id === action.payload.session_id
+            ? { ...s, transcript: [...(s.transcript || []), action.payload] }
+            : s
+        ),
+      };
+
     case 'NOTIFICATION_NEW':
       return {
         ...state,
@@ -194,6 +204,7 @@ export default function App() {
     socket.on('user_input:resolved', (data) => dispatch({ type: 'USER_INPUT_RESOLVED', payload: data }));
     socket.on('question:requested', (data) => dispatch({ type: 'QUESTION_REQUESTED', payload: data }));
     socket.on('question:resolved', (data) => dispatch({ type: 'QUESTION_RESOLVED', payload: data }));
+    socket.on('transcript:entry', (data) => dispatch({ type: 'TRANSCRIPT_ENTRY', payload: data }));
 
     return () => {
       socket.off('connect');
@@ -214,6 +225,7 @@ export default function App() {
       socket.off('user_input:resolved');
       socket.off('question:requested');
       socket.off('question:resolved');
+      socket.off('transcript:entry');
     };
   }, []);
 

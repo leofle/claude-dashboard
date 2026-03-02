@@ -24,7 +24,10 @@ const {
   insertApprovalRequest,
   getApprovalRequest,
   insertQuestionRequest,
+  updateTranscriptPath,
 } = require('../db');
+
+const { startWatching, stopWatching } = require('../transcript-watcher');
 
 function getIo(req) {
   return req.app.get('io');
@@ -49,10 +52,16 @@ function ensureSession(sessionId, extra = {}) {
 
 router.post('/session-start', (req, res) => {
   // Claude Code sends: { session_id, cwd, hook_event_name, transcript_path, permission_mode }
-  const { session_id, cwd } = req.body;
+  const { session_id, cwd, transcript_path } = req.body;
   if (!session_id) return res.json({});
 
   ensureSession(session_id, { cwd });
+
+  if (transcript_path) {
+    updateTranscriptPath.run({ id: session_id, transcript_path });
+    startWatching(session_id, transcript_path, getIo(req));
+  }
+
   const io = getIo(req);
   io.emit('session:new', getSession.get(session_id));
 
@@ -213,6 +222,7 @@ router.post('/stop', (req, res) => {
   if (!session_id) return res.json({});
 
   endSession.run(session_id);
+  stopWatching(session_id);
 
   const io = getIo(req);
   io.emit('session:ended', { session_id, ended_at: new Date().toISOString() });

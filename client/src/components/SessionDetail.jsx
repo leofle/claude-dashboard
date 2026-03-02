@@ -3,6 +3,7 @@ import { X, Terminal, Clock, GitBranch } from 'lucide-react';
 import TodoList from './TodoList.jsx';
 import ActivityLog from './ActivityLog.jsx';
 import SubAgentTree from './SubAgentTree.jsx';
+import TranscriptView from './TranscriptView.jsx';
 
 function parseUtc(ts) {
   if (!ts) return null;
@@ -144,6 +145,14 @@ export default function SessionDetail({ session, allSessions, onClose }) {
               <SubAgentTree session={session} allSessions={allSessions} />
             </section>
           )}
+
+          {/* Conversation transcript */}
+          <section>
+            <h3 className="text-sm font-semibold text-[#e6edf3] mb-3 uppercase tracking-wide">
+              Conversation
+            </h3>
+            <TranscriptView entries={session.transcript || []} />
+          </section>
         </div>
       </div>
     </>

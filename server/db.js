@@ -95,7 +95,20 @@ db.exec(`
     created_at TEXT NOT NULL DEFAULT (datetime('now')),
     answered_at TEXT
   );
+
+  CREATE TABLE IF NOT EXISTS transcript_entries (
+    id TEXT PRIMARY KEY,
+    session_id TEXT NOT NULL,
+    role TEXT NOT NULL,
+    text TEXT,
+    tool_uses TEXT,
+    timestamp TEXT,
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+  );
 `);
+
+// Migration: add transcript_path column to sessions if it doesn't exist yet
+try { db.exec(`ALTER TABLE sessions ADD COLUMN transcript_path TEXT`); } catch {}
 
 // ─── Transaction helper ────────────────────────────────────────────────────
 
@@ -129,6 +142,13 @@ const upsertSession = {
     $agent_type: p.agent_type || 'main',
     $parent_session_id: p.parent_session_id || null,
   }),
+};
+
+const _updateTranscriptPath = db.prepare(
+  `UPDATE sessions SET transcript_path = $transcript_path WHERE id = $id`
+);
+const updateTranscriptPath = {
+  run: (p) => _updateTranscriptPath.run({ $id: p.id, $transcript_path: p.transcript_path }),
 };
 
 const _getSession = db.prepare(`SELECT * FROM sessions WHERE id = $id`);
@@ -380,6 +400,33 @@ const _getPendingQuestionRequests = db.prepare(
 );
 const getPendingQuestionRequests = { all: () => _getPendingQuestionRequests.all() };
 
+// ─── Transcript Entry Helpers ──────────────────────────────────────────────
+
+const _insertTranscriptEntry = db.prepare(`
+  INSERT OR IGNORE INTO transcript_entries (id, session_id, role, text, tool_uses, timestamp)
+  VALUES ($id, $session_id, $role, $text, $tool_uses, $timestamp)
+`);
+const insertTranscriptEntry = {
+  run: (p) => _insertTranscriptEntry.run({
+    $id: p.id,
+    $session_id: p.session_id,
+    $role: p.role,
+    $text: p.text || null,
+    $tool_uses: p.tool_uses || null,
+    $timestamp: p.timestamp || new Date().toISOString(),
+  }),
+};
+
+const _getTranscriptEntries = db.prepare(
+  `SELECT * FROM transcript_entries WHERE session_id = $id ORDER BY timestamp ASC LIMIT 500`
+);
+const getTranscriptEntries = {
+  all: (id) => _getTranscriptEntries.all({ $id: id }).map(e => ({
+    ...e,
+    tool_uses: e.tool_uses ? JSON.parse(e.tool_uses) : null,
+  })),
+};
+
 // ─── Full state for initial load ───────────────────────────────────────────
 
 function getFullState() {
@@ -388,6 +435,7 @@ function getFullState() {
     ...s,
     todos: getTodosForSession.all(s.id),
     recentEvents: getRecentToolEvents.all(s.id),
+    transcript: getTranscriptEntries.all(s.id),
   }));
   return {
     sessions: result,
@@ -434,5 +482,8 @@ module.exports = {
   getQuestionRequest,
   resolveQuestionRequest,
   getPendingQuestionRequests,
+  updateTranscriptPath,
+  insertTranscriptEntry,
+  getTranscriptEntries,
   getFullState,
 };
