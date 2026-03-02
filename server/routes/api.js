@@ -1,7 +1,10 @@
 const express = require('express');
 const { v4: uuidv4 } = require('uuid');
+const fs = require('fs');
+const { spawn } = require('child_process');
 const router = express.Router();
 const sessionScanner = require('../session-scanner');
+const { pendingSpawns, spawnedChildren } = require('../spawned-sessions');
 
 const MCP_TIMEOUT_MS = parseInt(process.env.MCP_TIMEOUT || '300', 10) * 1000;
 
@@ -31,6 +34,8 @@ const {
   resolveQuestionRequest,
   insertPendingCommand,
   getFullState,
+  endSession,
+  getSessionPid,
 } = require('../db');
 
 function getIo(req) {
@@ -274,6 +279,66 @@ router.post('/mcp/tool', async (req, res) => {
 
   // Unknown tool
   res.status(400).json({ error: `Unknown MCP tool: ${tool}` });
+});
+
+// ─── Spawn Session ─────────────────────────────────────────────────────────
+
+router.post('/sessions/spawn', (req, res) => {
+  const { path: cwdPath, prompt } = req.body;
+  if (!cwdPath) return res.status(400).json({ error: 'path required' });
+  if (!fs.existsSync(cwdPath)) return res.status(400).json({ error: 'path does not exist' });
+
+  const child = spawn('claude', ['--dangerously-skip-permissions'], {
+    cwd: cwdPath,
+    stdio: ['pipe', 'pipe', 'pipe'],
+    env: { ...process.env },
+  });
+
+  pendingSpawns.set(cwdPath, child.pid);
+  spawnedChildren.set(child.pid, child);
+
+  if (prompt) {
+    child.stdin.write(prompt + '\n');
+  }
+
+  child.stdout.on('data', (d) => process.stdout.write(`[spawn:${child.pid}] ${d}`));
+  child.stderr.on('data', (d) => process.stderr.write(`[spawn:${child.pid}] ${d}`));
+  child.on('exit', (code) => {
+    spawnedChildren.delete(child.pid);
+    console.log(`[spawn] process ${child.pid} exited with code ${code}`);
+  });
+
+  console.log(`[api] spawned claude pid=${child.pid} cwd=${cwdPath}`);
+  res.json({ pid: child.pid, message: 'Session spawning...' });
+});
+
+// ─── Kill Session ──────────────────────────────────────────────────────────
+
+router.post('/sessions/:id/kill', async (req, res) => {
+  const session = getSession.get(req.params.id);
+  if (!session) return res.status(404).json({ error: 'Not found' });
+
+  const pidRow = getSessionPid.get(req.params.id);
+  const pid = pidRow?.pid;
+
+  if (pid) {
+    try { process.kill(pid, 'SIGTERM'); } catch {}
+    await new Promise(r => setTimeout(r, 5000));
+    try {
+      process.kill(pid, 0); // throws if process is gone
+      process.kill(pid, 'SIGKILL');
+    } catch {}
+    spawnedChildren.delete(pid);
+  }
+
+  endSession.run(req.params.id);
+
+  const io = getIo(req);
+  io.emit('session:updated', getSession.get(req.params.id));
+  io.emit('session:ended', { session_id: req.params.id, ended_at: new Date().toISOString() });
+
+  console.log(`[api] killed session ${req.params.id} pid=${pid}`);
+  res.json({ success: true });
 });
 
 // ─── Pending Commands ──────────────────────────────────────────────────────

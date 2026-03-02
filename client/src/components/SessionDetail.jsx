@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { X, Terminal, Clock, GitBranch } from 'lucide-react';
+import { X, Terminal, Clock, GitBranch, Square } from 'lucide-react';
 import TodoList from './TodoList.jsx';
 import ActivityLog from './ActivityLog.jsx';
 import SubAgentTree from './SubAgentTree.jsx';
@@ -47,6 +47,19 @@ function statusColor(status) {
 export default function SessionDetail({ session, allSessions, onClose }) {
   const elapsed = useElapsedFull(session.started_at, session.ended_at);
   const color = statusColor(session.status);
+  const [killing, setKilling] = useState(false);
+  const canKill = session.spawned && session.status !== 'ended';
+
+  async function handleKill() {
+    if (!canKill || killing) return;
+    setKilling(true);
+    try {
+      await fetch(`/api/sessions/${session.id}/kill`, { method: 'POST' });
+    } finally {
+      setKilling(false);
+    }
+  }
+
   const [drawerWidth, setDrawerWidth] = useState(() => {
     const saved = localStorage.getItem('drawer-width');
     return saved ? parseInt(saved, 10) : 720;
@@ -134,12 +147,24 @@ export default function SessionDetail({ session, allSessions, onClose }) {
               )}
             </div>
           </div>
-          <button
-            onClick={onClose}
-            className="flex-shrink-0 ml-3 p-1.5 rounded hover:bg-[#30363d] text-[#8b949e] hover:text-[#e6edf3] transition-colors"
-          >
-            <X size={16} />
-          </button>
+          <div className="flex items-center gap-2 flex-shrink-0 ml-3">
+            {canKill && (
+              <button
+                onClick={handleKill}
+                disabled={killing}
+                className="flex items-center gap-1.5 px-2.5 py-1.5 rounded text-xs text-[#f85149] border border-[#f85149]/30 hover:bg-[#f85149]/10 transition-colors disabled:opacity-50"
+              >
+                <Square size={12} />
+                {killing ? 'Killing…' : 'Kill Session'}
+              </button>
+            )}
+            <button
+              onClick={onClose}
+              className="p-1.5 rounded hover:bg-[#30363d] text-[#8b949e] hover:text-[#e6edf3] transition-colors"
+            >
+              <X size={16} />
+            </button>
+          </div>
         </div>
 
         {/* Meta row */}

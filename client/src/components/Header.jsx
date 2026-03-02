@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
-import { Activity, Bell, CheckSquare, RefreshCw, Wifi, WifiOff } from 'lucide-react';
+import { Activity, Bell, CheckSquare, Plus, RefreshCw, Wifi, WifiOff } from 'lucide-react';
+import LaunchSessionModal from './LaunchSessionModal.jsx';
 
 export default function Header({
   connected,
@@ -9,6 +10,7 @@ export default function Header({
   onNotificationsClick,
 }) {
   const [refreshing, setRefreshing] = useState(false);
+  const [showLaunch, setShowLaunch] = useState(false);
 
   async function handleRefresh() {
     setRefreshing(true);
@@ -16,6 +18,7 @@ export default function Header({
     setTimeout(() => setRefreshing(false), 800);
   }
   return (
+    <>
     <header className="border-b border-[#30363d] bg-[#161b22] sticky top-0 z-40">
       <div className="max-w-7xl mx-auto px-4 py-3 flex items-center justify-between">
         {/* Left: title + status */}
@@ -56,6 +59,16 @@ export default function Header({
             </div>
           )}
 
+          {/* New Session button */}
+          <button
+            onClick={() => setShowLaunch(true)}
+            title="Launch a new Claude session"
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded bg-[#238636] hover:bg-[#2ea043] text-sm text-white transition-colors"
+          >
+            <Plus size={14} />
+            <span>New Session</span>
+          </button>
+
           {/* Refresh button */}
           <button
             onClick={handleRefresh}
@@ -81,5 +94,7 @@ export default function Header({
         </div>
       </div>
     </header>
+    {showLaunch && <LaunchSessionModal onClose={() => setShowLaunch(false)} />}
+  </>
   );
 }

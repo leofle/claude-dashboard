@@ -116,6 +116,9 @@ db.exec(`
 
 // Migration: add transcript_path column to sessions if it doesn't exist yet
 try { db.exec(`ALTER TABLE sessions ADD COLUMN transcript_path TEXT`); } catch {}
+// Migration: add pid and spawned columns for dashboard-launched sessions
+try { db.exec(`ALTER TABLE sessions ADD COLUMN pid INTEGER`); } catch {}
+try { db.exec(`ALTER TABLE sessions ADD COLUMN spawned INTEGER DEFAULT 0`); } catch {}
 
 // ─── Transaction helper ────────────────────────────────────────────────────
 
@@ -157,6 +160,16 @@ const _updateTranscriptPath = db.prepare(
 const updateTranscriptPath = {
   run: (p) => _updateTranscriptPath.run({ $id: p.id, $transcript_path: p.transcript_path }),
 };
+
+const _updateSessionPid = db.prepare(
+  `UPDATE sessions SET pid = $pid, spawned = 1 WHERE id = $id`
+);
+const updateSessionPid = {
+  run: (p) => _updateSessionPid.run({ $pid: p.pid, $id: p.id }),
+};
+
+const _getSessionPid = db.prepare(`SELECT pid FROM sessions WHERE id = $id`);
+const getSessionPid = { get: (id) => _getSessionPid.get({ $id: id }) };
 
 const _getSession = db.prepare(`SELECT * FROM sessions WHERE id = $id`);
 const getSession = { get: (id) => _getSession.get({ $id: id }) };
@@ -507,6 +520,8 @@ module.exports = {
   resolveQuestionRequest,
   getPendingQuestionRequests,
   updateTranscriptPath,
+  updateSessionPid,
+  getSessionPid,
   insertTranscriptEntry,
   getTranscriptEntries,
   insertPendingCommand,

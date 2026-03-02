@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Clock, Terminal, Users } from 'lucide-react';
+import { Clock, Terminal, Users, Square } from 'lucide-react';
 
 // SQLite returns "2026-03-01 03:06:10" without timezone — treat as UTC
 function parseUtc(ts) {
@@ -64,9 +64,22 @@ export default function SessionCard({ session, allSessions, onClick }) {
   const elapsed = useElapsed(session.started_at);
   const color = statusColor(session.status);
   const children = allSessions.filter(s => s.parent_session_id === session.id);
+  const [killing, setKilling] = useState(false);
 
   const shortId = session.id ? session.id.slice(0, 8) : '????????';
   const cwd = session.cwd ? session.cwd.replace(/^.*\//, '') : null;
+  const canKill = session.spawned && session.status !== 'ended';
+
+  async function handleKill(e) {
+    e.stopPropagation();
+    if (!canKill || killing) return;
+    setKilling(true);
+    try {
+      await fetch(`/api/sessions/${session.id}/kill`, { method: 'POST' });
+    } finally {
+      setKilling(false);
+    }
+  }
 
   return (
     <div
@@ -91,7 +104,20 @@ export default function SessionCard({ session, allSessions, onClick }) {
             </span>
           )}
         </div>
-        <span className="text-xs capitalize" style={{ color }}>{session.status}</span>
+        <div className="flex items-center gap-2">
+          {canKill && (
+            <button
+              onClick={handleKill}
+              disabled={killing}
+              title="Kill this session"
+              className="flex items-center gap-1 px-1.5 py-0.5 rounded text-xs text-[#f85149] hover:bg-[#f85149]/10 border border-transparent hover:border-[#f85149]/30 transition-colors disabled:opacity-50"
+            >
+              <Square size={10} />
+              {killing ? 'Killing…' : 'Kill'}
+            </button>
+          )}
+          <span className="text-xs capitalize" style={{ color }}>{session.status}</span>
+        </div>
       </div>
 
       {/* CWD */}

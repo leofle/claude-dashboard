@@ -27,7 +27,10 @@ const {
   getPendingCommand,
   deletePendingCommand,
   updateTranscriptPath,
+  updateSessionPid,
 } = require('../db');
+
+const { pendingSpawns } = require('../spawned-sessions');
 
 const { startWatching, stopWatching } = require('../transcript-watcher');
 
@@ -58,6 +61,14 @@ router.post('/session-start', (req, res) => {
   if (!session_id) return res.json({});
 
   ensureSession(session_id, { cwd });
+
+  // Link PID if this session was spawned by the dashboard
+  if (cwd && pendingSpawns.has(cwd)) {
+    const pid = pendingSpawns.get(cwd);
+    updateSessionPid.run({ pid, id: session_id });
+    pendingSpawns.delete(cwd);
+    console.log(`[hook] linked pid=${pid} to session ${session_id}`);
+  }
 
   if (transcript_path) {
     updateTranscriptPath.run({ id: session_id, transcript_path });
