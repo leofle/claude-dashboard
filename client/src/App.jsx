@@ -1,7 +1,7 @@
 import React, { useReducer, useEffect, useState, useCallback, useMemo } from 'react';
 import socket from './socket.js';
 import Header from './components/Header.jsx';
-import SessionCard from './components/SessionCard.jsx';
+import SessionListItem from './components/SessionListItem.jsx';
 import SessionDetail from './components/SessionDetail.jsx';
 import NotificationPanel from './components/NotificationPanel.jsx';
 import ApprovalModal from './components/ApprovalModal.jsx';
@@ -353,7 +353,7 @@ export default function App() {
   const visibleEnded = filteredSessions.filter(s => s.status === 'ended');
 
   return (
-    <div className="min-h-screen bg-[#0d1117] text-[#e6edf3]">
+    <div className="h-screen flex flex-col bg-[#0d1117] text-[#e6edf3] overflow-hidden">
       <Header
         connected={state.connected}
         activeCount={activeSessions.length}
@@ -362,48 +362,36 @@ export default function App() {
         onNotificationsClick={() => setShowNotifications(v => !v)}
       />
 
-      <main className="max-w-7xl mx-auto px-4 py-6">
-        {/* Notification panel */}
-        {showNotifications && (
-          <NotificationPanel
-            notifications={state.notifications}
-            sessions={state.sessions}
-            onMarkRead={handleMarkRead}
-            onDelete={handleDeleteNotification}
-            onClose={() => setShowNotifications(false)}
-          />
-        )}
+      <div className="flex flex-1 overflow-hidden">
+        {/* ── Sidebar ──────────────────────────────────────────────── */}
+        <aside className="w-64 flex-shrink-0 border-r border-[#21262d] flex flex-col overflow-hidden bg-[#010409]">
 
-        {/* Search + filter bar */}
-        {state.sessions.length > 0 && (
-          <div className="flex flex-col sm:flex-row gap-3 mb-5">
-            {/* Search input */}
-            <div className="relative flex-1 max-w-xs">
-              <Search size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-[#484f58] pointer-events-none" />
+          {/* Search + filter */}
+          <div className="px-3 pt-3 pb-2 space-y-2 border-b border-[#21262d]">
+            <div className="relative">
+              <Search size={12} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-[#484f58] pointer-events-none" />
               <input
                 type="text"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="Filter by path or ID…"
-                className="w-full pl-8 pr-7 py-1.5 bg-[#161b22] border border-[#30363d] rounded text-sm text-[#e6edf3] placeholder-[#484f58] focus:outline-none focus:border-[#58a6ff] transition-colors"
+                placeholder="Filter sessions…"
+                className="w-full pl-7 pr-6 py-1.5 bg-[#161b22] border border-[#30363d] rounded-md text-xs text-[#e6edf3] placeholder-[#484f58] focus:outline-none focus:border-[#58a6ff] transition-colors"
               />
               {searchQuery && (
                 <button
                   onClick={() => setSearchQuery('')}
                   className="absolute right-2 top-1/2 -translate-y-1/2 text-[#484f58] hover:text-[#8b949e]"
                 >
-                  <X size={12} />
+                  <X size={11} />
                 </button>
               )}
             </div>
-
-            {/* Status tabs */}
-            <div className="flex gap-1">
+            <div className="flex gap-0.5">
               {STATUS_TABS.map(tab => {
                 const count = tab.key === 'all'
                   ? state.sessions.length
                   : tab.key === 'waiting'
-                    ? [...waitingSessionIds].length
+                    ? waitingSessionIds.size
                     : state.sessions.filter(s =>
                         tab.key === 'active'
                           ? s.status === 'active' && !waitingSessionIds.has(s.id)
@@ -414,15 +402,15 @@ export default function App() {
                   <button
                     key={tab.key}
                     onClick={() => setStatusFilter(tab.key)}
-                    className={`px-2.5 py-1 rounded text-xs transition-colors ${
+                    className={`flex-1 py-1 text-[10px] rounded-md transition-colors ${
                       isActive
-                        ? 'bg-[#30363d] text-[#e6edf3]'
-                        : 'text-[#8b949e] hover:text-[#e6edf3] hover:bg-[#30363d]/50'
+                        ? 'bg-[#1c2128] text-[#e6edf3]'
+                        : 'text-[#8b949e] hover:text-[#e6edf3] hover:bg-[#1c2128]/50'
                     }`}
                   >
                     {tab.label}
                     {count > 0 && (
-                      <span className={`ml-1.5 ${isActive ? 'text-[#8b949e]' : 'text-[#484f58]'}`}>
+                      <span className={`ml-1 ${isActive ? 'text-[#8b949e]' : 'text-[#484f58]'}`}>
                         {count}
                       </span>
                     )}
@@ -431,84 +419,100 @@ export default function App() {
               })}
             </div>
           </div>
-        )}
 
-        {/* Session grid */}
-        {visibleActive.length === 0 && visibleEnded.length === 0 ? (
-          state.sessions.length === 0 ? (
-            <div className="flex flex-col items-center justify-center py-32 text-[#8b949e]">
-              <div className="text-6xl mb-4">🤖</div>
-              <div className="text-xl font-semibold mb-2">No active sessions</div>
-              <div className="text-sm text-center max-w-sm">
-                Start a Claude Code session in your terminal to see it here.
-                Make sure you've run <code className="font-mono bg-[#161b22] px-1 rounded">bash scripts/install.sh</code> first.
+          {/* Session list */}
+          <div className="flex-1 overflow-y-auto py-1">
+            {visibleActive.length === 0 && visibleEnded.length === 0 ? (
+              <div className="px-4 py-8 text-center text-[11px] text-[#484f58]">
+                {state.sessions.length === 0
+                  ? 'Start a Claude session or click New Session.'
+                  : 'No sessions match your filter.'}
+              </div>
+            ) : (
+              <>
+                {visibleActive.map(session => (
+                  <SessionListItem
+                    key={session.id}
+                    session={session}
+                    isWaiting={waitingSessionIds.has(session.id)}
+                    selected={selectedSession?.id === session.id}
+                    onSelect={setSelectedSession}
+                  />
+                ))}
+
+                {/* Ended sessions — collapsed unless filter=ended */}
+                {visibleEnded.length > 0 && statusFilter !== 'ended' && (
+                  <details className="mt-1">
+                    <summary className="px-3 py-2 text-[10px] text-[#484f58] cursor-pointer hover:text-[#8b949e] select-none uppercase tracking-wider">
+                      {visibleEnded.length} ended
+                    </summary>
+                    {visibleEnded.map(session => (
+                      <SessionListItem
+                        key={session.id}
+                        session={session}
+                        isWaiting={false}
+                        selected={selectedSession?.id === session.id}
+                        onSelect={setSelectedSession}
+                      />
+                    ))}
+                  </details>
+                )}
+
+                {statusFilter === 'ended' && visibleEnded.map(session => (
+                  <SessionListItem
+                    key={session.id}
+                    session={session}
+                    isWaiting={false}
+                    selected={selectedSession?.id === session.id}
+                    onSelect={setSelectedSession}
+                  />
+                ))}
+              </>
+            )}
+          </div>
+        </aside>
+
+        {/* ── Main pane ──────────────────────────────────────────────── */}
+        <main className="flex-1 overflow-hidden relative">
+          {/* Notification panel overlay */}
+          {showNotifications && (
+            <div className="absolute inset-0 z-10 overflow-auto">
+              <NotificationPanel
+                notifications={state.notifications}
+                sessions={state.sessions}
+                onMarkRead={handleMarkRead}
+                onDelete={handleDeleteNotification}
+                onClose={() => setShowNotifications(false)}
+              />
+            </div>
+          )}
+
+          {selectedSession ? (
+            <SessionDetail
+              session={selectedSession}
+              allSessions={state.sessions}
+              isWaiting={waitingSessionIds.has(selectedSession.id)}
+              onClose={() => setSelectedSession(null)}
+            />
+          ) : (
+            <div className="flex flex-col items-center justify-center h-full text-[#8b949e]">
+              <div className="w-14 h-14 rounded-2xl bg-[#161b22] border border-[#30363d] flex items-center justify-center mb-5 text-2xl shadow-lg">
+                🤖
+              </div>
+              <div className="text-sm font-semibold text-[#e6edf3] mb-1.5">
+                {state.sessions.length === 0 ? 'No sessions yet' : 'Select a session'}
+              </div>
+              <div className="text-xs text-center max-w-xs leading-relaxed">
+                {state.sessions.length === 0
+                  ? 'Start a Claude Code session in your terminal, or click New Session.'
+                  : 'Click a session in the sidebar to view details.'}
               </div>
             </div>
-          ) : (
-            <div className="flex flex-col items-center justify-center py-20 text-[#8b949e]">
-              <div className="text-sm">No sessions match your filter.</div>
-            </div>
-          )
-        ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-            {visibleActive.map(session => (
-              <SessionCard
-                key={session.id}
-                session={session}
-                allSessions={state.sessions}
-                isWaiting={waitingSessionIds.has(session.id)}
-                onClick={() => setSelectedSession(session)}
-              />
-            ))}
-          </div>
-        )}
+          )}
+        </main>
+      </div>
 
-        {/* Ended sessions (collapsed) — only when not already showing all */}
-        {visibleEnded.length > 0 && statusFilter !== 'ended' && (
-          <details className="mt-8">
-            <summary className="text-[#8b949e] text-sm cursor-pointer select-none hover:text-[#e6edf3] transition-colors">
-              {visibleEnded.length} ended session(s)
-            </summary>
-            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4 mt-4 opacity-50">
-              {visibleEnded.map(session => (
-                <SessionCard
-                  key={session.id}
-                  session={session}
-                  allSessions={state.sessions}
-                  isWaiting={false}
-                  onClick={() => setSelectedSession(session)}
-                />
-              ))}
-            </div>
-          </details>
-        )}
-
-        {/* Ended sessions shown directly when filter=ended */}
-        {statusFilter === 'ended' && visibleEnded.length > 0 && (
-          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4 opacity-50">
-            {visibleEnded.map(session => (
-              <SessionCard
-                key={session.id}
-                session={session}
-                allSessions={state.sessions}
-                isWaiting={false}
-                onClick={() => setSelectedSession(session)}
-              />
-            ))}
-          </div>
-        )}
-      </main>
-
-      {/* Session detail drawer */}
-      {selectedSession && (
-        <SessionDetail
-          session={selectedSession}
-          allSessions={state.sessions}
-          onClose={() => setSelectedSession(null)}
-        />
-      )}
-
-      {/* Approval modal — shown for first pending approval */}
+      {/* Approval modal */}
       {pendingApproval && !pendingMcpRequest && !pendingQuestion && (
         <ApprovalModal
           approval={pendingApproval}
@@ -527,7 +531,7 @@ export default function App() {
         />
       )}
 
-      {/* AskUserQuestion modal — shown for first pending question */}
+      {/* AskUserQuestion modal */}
       {pendingQuestion && (
         <AskUserQuestionModal
           request={pendingQuestion}

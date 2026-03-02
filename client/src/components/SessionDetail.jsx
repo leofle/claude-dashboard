@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { X, Terminal, Clock, GitBranch, Square, GitFork } from 'lucide-react';
 import TodoList from './TodoList.jsx';
 import ActivityLog from './ActivityLog.jsx';
@@ -12,7 +12,6 @@ function parseUtc(ts) {
 
 function useElapsedFull(startedAt, endedAt) {
   const [elapsed, setElapsed] = React.useState('');
-
   React.useEffect(() => {
     function update() {
       if (!startedAt) return;
@@ -31,25 +30,37 @@ function useElapsedFull(startedAt, endedAt) {
       return () => clearInterval(id);
     }
   }, [startedAt, endedAt]);
-
   return elapsed;
 }
 
-function statusColor(status) {
+function statusColor(status, isWaiting) {
+  if (isWaiting) return '#d29922';
   switch (status) {
     case 'active': return '#3fb950';
-    case 'idle': return '#d29922';
-    case 'ended': return '#8b949e';
-    default: return '#8b949e';
+    case 'idle':   return '#8b949e';
+    case 'ended':  return '#8b949e';
+    default:       return '#8b949e';
   }
 }
 
-export default function SessionDetail({ session, allSessions, onClose }) {
+function statusLabel(status, isWaiting) {
+  if (isWaiting) return 'waiting';
+  return status;
+}
+
+export default function SessionDetail({ session, allSessions, isWaiting, onClose }) {
   const elapsed = useElapsedFull(session.started_at, session.ended_at);
-  const color = statusColor(session.status);
+  const color = statusColor(session.status, isWaiting);
   const [killing, setKilling] = useState(false);
   const [forking, setForking] = useState(false);
   const canKill = session.spawned && session.status !== 'ended';
+
+  // Escape to close
+  useEffect(() => {
+    const handler = (e) => { if (e.key === 'Escape') onClose(); };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, [onClose]);
 
   async function handleKill() {
     if (!canKill || killing) return;
@@ -75,184 +86,118 @@ export default function SessionDetail({ session, allSessions, onClose }) {
     }
   }
 
-  const [drawerWidth, setDrawerWidth] = useState(() => {
-    const saved = localStorage.getItem('drawer-width');
-    return saved ? parseInt(saved, 10) : 720;
-  });
-  const isResizing = useRef(false);
-  const widthRef = useRef(drawerWidth);
-
-  // Close on Escape
-  useEffect(() => {
-    const handler = (e) => { if (e.key === 'Escape') onClose(); };
-    window.addEventListener('keydown', handler);
-    return () => window.removeEventListener('keydown', handler);
-  }, [onClose]);
-
-  // Resize drag handlers
-  useEffect(() => {
-    function onMouseMove(e) {
-      if (!isResizing.current) return;
-      const newWidth = Math.min(Math.max(window.innerWidth - e.clientX, 420), window.innerWidth - 80);
-      widthRef.current = newWidth;
-      setDrawerWidth(newWidth);
-    }
-    function onMouseUp() {
-      if (isResizing.current) {
-        localStorage.setItem('drawer-width', widthRef.current);
-      }
-      isResizing.current = false;
-      document.body.style.cursor = '';
-      document.body.style.userSelect = '';
-    }
-    window.addEventListener('mousemove', onMouseMove);
-    window.addEventListener('mouseup', onMouseUp);
-    return () => {
-      window.removeEventListener('mousemove', onMouseMove);
-      window.removeEventListener('mouseup', onMouseUp);
-    };
-  }, []);
-
-  function startResize(e) {
-    isResizing.current = true;
-    document.body.style.cursor = 'col-resize';
-    document.body.style.userSelect = 'none';
-    e.preventDefault();
-  }
-
   const children = allSessions.filter(s => s.parent_session_id === session.id);
   const hasTree = children.length > 0 || !!session.parent_session_id;
 
   return (
-    <>
-      {/* Backdrop */}
-      <div
-        className="fixed inset-0 bg-black/60 z-40"
-        onClick={onClose}
-      />
+    <div className="h-full flex flex-col bg-[#0d1117]">
 
-      {/* Drawer */}
-      <div
-        className="fixed right-0 top-0 bottom-0 bg-[#161b22] border-l border-[#30363d] z-50 flex flex-col overflow-hidden"
-        style={{ width: drawerWidth }}
-      >
-        {/* Resize handle */}
-        <div
-          onMouseDown={startResize}
-          className="absolute left-0 top-0 bottom-0 w-1 cursor-col-resize hover:bg-[#58a6ff]/40 transition-colors z-10"
-        />
-
-        {/* Header */}
-        <div className="flex items-center justify-between px-5 py-4 border-b border-[#30363d] flex-shrink-0">
-          <div className="flex items-center gap-2 min-w-0">
-            <span
-              className="w-2.5 h-2.5 rounded-full flex-shrink-0"
-              style={{
-                backgroundColor: color,
-                boxShadow: session.status === 'active' ? `0 0 8px ${color}` : 'none',
-              }}
-            />
-            <div className="min-w-0">
-              <div className="font-mono text-sm text-[#e6edf3] truncate">{session.id}</div>
-              {session.cwd && (
-                <div className="flex items-center gap-1 text-xs text-[#8b949e] truncate">
-                  <Terminal size={10} />
-                  <span className="truncate">{session.cwd}</span>
-                </div>
-              )}
-            </div>
+      {/* ── Header ─────────────────────────────────────────────────── */}
+      <div className="flex items-center justify-between px-5 py-3.5 border-b border-[#21262d] flex-shrink-0 bg-[#161b22]">
+        <div className="flex items-center gap-2.5 min-w-0">
+          <span
+            className="w-2 h-2 rounded-full flex-shrink-0"
+            style={{
+              backgroundColor: color,
+              boxShadow: (session.status === 'active' || isWaiting) ? `0 0 8px ${color}` : 'none',
+            }}
+          />
+          <div className="min-w-0">
+            <div className="font-mono text-sm text-[#e6edf3] truncate leading-tight">{session.id}</div>
+            {session.cwd && (
+              <div className="flex items-center gap-1 text-[11px] text-[#8b949e] truncate mt-0.5">
+                <Terminal size={10} />
+                <span className="truncate font-mono">{session.cwd}</span>
+              </div>
+            )}
           </div>
-          <div className="flex items-center gap-2 flex-shrink-0 ml-3">
-            {/* Fork — spawn a new session in the same directory */}
-            {session.cwd && session.status !== 'ended' && (
-              <button
-                onClick={handleFork}
-                disabled={forking}
-                title="Fork: open a new Claude session in the same directory"
-                className="flex items-center gap-1.5 px-2.5 py-1.5 rounded text-xs text-[#8b949e] border border-[#30363d] hover:border-[#58a6ff]/50 hover:text-[#58a6ff] transition-colors disabled:opacity-50"
-              >
-                <GitFork size={12} />
-                {forking ? 'Forking…' : 'Fork'}
-              </button>
-            )}
-            {canKill && (
-              <button
-                onClick={handleKill}
-                disabled={killing}
-                className="flex items-center gap-1.5 px-2.5 py-1.5 rounded text-xs text-[#f85149] border border-[#f85149]/30 hover:bg-[#f85149]/10 transition-colors disabled:opacity-50"
-              >
-                <Square size={12} />
-                {killing ? 'Killing…' : 'Kill Session'}
-              </button>
-            )}
+        </div>
+
+        <div className="flex items-center gap-1 flex-shrink-0 ml-3">
+          {session.cwd && session.status !== 'ended' && (
             <button
-              onClick={onClose}
-              className="p-1.5 rounded hover:bg-[#30363d] text-[#8b949e] hover:text-[#e6edf3] transition-colors"
+              onClick={handleFork}
+              disabled={forking}
+              title="Fork: open a new Claude session in the same directory"
+              className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs text-[#8b949e] hover:text-[#e6edf3] hover:bg-[#1c2128] border border-transparent hover:border-[#30363d] transition-colors disabled:opacity-50"
             >
-              <X size={16} />
+              <GitFork size={12} />
+              {forking ? 'Forking…' : 'Fork'}
             </button>
-          </div>
-        </div>
-
-        {/* Meta row */}
-        <div className="flex items-center gap-4 px-5 py-2 border-b border-[#30363d] flex-shrink-0 text-xs text-[#8b949e]">
-          <div className="flex items-center gap-1">
-            <Clock size={11} />
-            <span>{elapsed}</span>
-          </div>
-          <div>
-            <span className="capitalize" style={{ color }}>{session.status}</span>
-          </div>
-          {session.agent_type === 'subagent' && (
-            <div className="flex items-center gap-1 text-[#58a6ff]">
-              <GitBranch size={11} />
-              <span>sub-agent</span>
-            </div>
           )}
-          {session.current_tool && (
-            <div className="font-mono text-[#58a6ff] bg-[#58a6ff]/10 px-1.5 py-0.5 rounded">
-              {session.current_tool}
-            </div>
+          {canKill && (
+            <button
+              onClick={handleKill}
+              disabled={killing}
+              className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs text-[#f85149] hover:bg-[#f85149]/10 border border-transparent hover:border-[#f85149]/20 transition-colors disabled:opacity-50"
+            >
+              <Square size={12} />
+              {killing ? 'Killing…' : 'Kill'}
+            </button>
           )}
-        </div>
-
-        {/* Scrollable content */}
-        <div className="flex-1 overflow-y-auto px-5 py-4 space-y-6">
-          {/* Todos */}
-          <section>
-            <h3 className="text-sm font-semibold text-[#e6edf3] mb-3 uppercase tracking-wide">
-              Todos
-            </h3>
-            <TodoList todos={session.todos || []} />
-          </section>
-
-          {/* Activity log */}
-          <section>
-            <h3 className="text-sm font-semibold text-[#e6edf3] mb-3 uppercase tracking-wide">
-              Activity Log
-            </h3>
-            <ActivityLog events={session.recentEvents || []} />
-          </section>
-
-          {/* Sub-agent tree */}
-          {hasTree && (
-            <section>
-              <h3 className="text-sm font-semibold text-[#e6edf3] mb-3 uppercase tracking-wide">
-                Agent Tree
-              </h3>
-              <SubAgentTree session={session} allSessions={allSessions} />
-            </section>
-          )}
-
-          {/* Conversation transcript */}
-          <section>
-            <h3 className="text-sm font-semibold text-[#e6edf3] mb-3 uppercase tracking-wide">
-              Conversation
-            </h3>
-            <TranscriptView entries={session.transcript || []} />
-          </section>
+          <button
+            onClick={onClose}
+            className="p-1.5 rounded-md hover:bg-[#1c2128] text-[#8b949e] hover:text-[#e6edf3] transition-colors"
+          >
+            <X size={15} />
+          </button>
         </div>
       </div>
-    </>
+
+      {/* ── Meta row ───────────────────────────────────────────────── */}
+      <div className="flex items-center gap-3 px-5 py-2 border-b border-[#21262d] flex-shrink-0 bg-[#161b22]/60 text-xs text-[#8b949e] flex-wrap">
+        <div className="flex items-center gap-1">
+          <Clock size={10} />
+          <span>{elapsed}</span>
+        </div>
+        <span className="capitalize font-medium" style={{ color }}>
+          {statusLabel(session.status, isWaiting)}
+        </span>
+        {session.agent_type === 'subagent' && (
+          <div className="flex items-center gap-1 text-[#58a6ff]">
+            <GitBranch size={10} />
+            <span>sub-agent</span>
+          </div>
+        )}
+        {session.current_tool && (
+          <div className="font-mono text-[#58a6ff] bg-[#58a6ff]/10 px-1.5 py-0.5 rounded-md">
+            {session.current_tool}
+          </div>
+        )}
+      </div>
+
+      {/* ── Scrollable content ─────────────────────────────────────── */}
+      <div className="flex-1 overflow-y-auto px-6 py-5 space-y-7">
+        <section>
+          <h3 className="text-[10px] font-semibold text-[#8b949e] uppercase tracking-widest mb-3">
+            Todos
+          </h3>
+          <TodoList todos={session.todos || []} />
+        </section>
+
+        <section>
+          <h3 className="text-[10px] font-semibold text-[#8b949e] uppercase tracking-widest mb-3">
+            Activity
+          </h3>
+          <ActivityLog events={session.recentEvents || []} />
+        </section>
+
+        {hasTree && (
+          <section>
+            <h3 className="text-[10px] font-semibold text-[#8b949e] uppercase tracking-widest mb-3">
+              Agent Tree
+            </h3>
+            <SubAgentTree session={session} allSessions={allSessions} />
+          </section>
+        )}
+
+        <section>
+          <h3 className="text-[10px] font-semibold text-[#8b949e] uppercase tracking-widest mb-3">
+            Conversation
+          </h3>
+          <TranscriptView entries={session.transcript || []} />
+        </section>
+      </div>
+    </div>
   );
 }
