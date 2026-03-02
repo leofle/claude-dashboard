@@ -25,7 +25,7 @@ export default function SessionListItem({ session, isWaiting, selected, onSelect
     ? session.cwd.split('/').filter(Boolean).pop()
     : (session.id?.slice(0, 8) ?? '????????');
 
-  const canKill = session.spawned && session.status !== 'ended';
+  const canKill = !!session.spawned && session.status !== 'ended';
   const todos = session.todos || [];
   const doneTodos = todos.filter(t => t.status === 'completed').length;
   const pct = todos.length ? Math.round((doneTodos / todos.length) * 100) : 0;

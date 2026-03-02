@@ -74,7 +74,7 @@ export default function SessionCard({ session, allSessions, isWaiting, onClick }
 
   const shortId = session.id ? session.id.slice(0, 8) : '????????';
   const cwd = session.cwd ? session.cwd.replace(/^.*\//, '') : null;
-  const canKill = session.spawned && session.status !== 'ended';
+  const canKill = !!session.spawned && session.status !== 'ended';
 
   async function handleKill(e) {
     e.stopPropagation();

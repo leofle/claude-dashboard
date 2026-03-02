@@ -53,7 +53,7 @@ export default function SessionDetail({ session, allSessions, isWaiting, onClose
   const color = statusColor(session.status, isWaiting);
   const [killing, setKilling] = useState(false);
   const [forking, setForking] = useState(false);
-  const canKill = session.spawned && session.status !== 'ended';
+  const canKill = !!session.spawned && session.status !== 'ended';
 
   // Escape to close
   useEffect(() => {
