@@ -47,8 +47,12 @@ function statusColor(status) {
 export default function SessionDetail({ session, allSessions, onClose }) {
   const elapsed = useElapsedFull(session.started_at, session.ended_at);
   const color = statusColor(session.status);
-  const [drawerWidth, setDrawerWidth] = useState(720);
+  const [drawerWidth, setDrawerWidth] = useState(() => {
+    const saved = localStorage.getItem('drawer-width');
+    return saved ? parseInt(saved, 10) : 720;
+  });
   const isResizing = useRef(false);
+  const widthRef = useRef(drawerWidth);
 
   // Close on Escape
   useEffect(() => {
@@ -61,10 +65,14 @@ export default function SessionDetail({ session, allSessions, onClose }) {
   useEffect(() => {
     function onMouseMove(e) {
       if (!isResizing.current) return;
-      const newWidth = window.innerWidth - e.clientX;
-      setDrawerWidth(Math.min(Math.max(newWidth, 420), window.innerWidth - 80));
+      const newWidth = Math.min(Math.max(window.innerWidth - e.clientX, 420), window.innerWidth - 80);
+      widthRef.current = newWidth;
+      setDrawerWidth(newWidth);
     }
     function onMouseUp() {
+      if (isResizing.current) {
+        localStorage.setItem('drawer-width', widthRef.current);
+      }
       isResizing.current = false;
       document.body.style.cursor = '';
       document.body.style.userSelect = '';

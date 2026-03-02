@@ -104,7 +104,7 @@ function TranscriptEntry({ entry }) {
       </div>
 
       {/* Bubble */}
-      <div className={`flex-1 min-w-0 max-w-[85%] ${isUser ? 'items-end' : 'items-start'} flex flex-col`}>
+      <div className={`flex-1 min-w-0 max-w-[680px] ${isUser ? 'items-end' : 'items-start'} flex flex-col`}>
         <div className={`flex items-center gap-2 mb-1 ${isUser ? 'flex-row-reverse' : ''}`}>
           <span className={`text-[10px] font-medium ${isUser ? 'text-[#58a6ff]' : 'text-[#3fb950]'}`}>
             {isUser ? 'You' : 'Claude'}
@@ -112,7 +112,7 @@ function TranscriptEntry({ entry }) {
           {time && <span className="text-[10px] text-[#484f58]">{time}</span>}
         </div>
 
-        <div className={`rounded-lg px-3 py-2 text-[13px] leading-relaxed ${
+        <div className={`rounded-lg px-3 py-2 text-[13px] leading-relaxed overflow-hidden ${
           isUser
             ? 'bg-[#1f3a5f] text-[#cdd9e5] rounded-tr-sm'
             : 'bg-[#1c2128] text-[#adbac7] rounded-tl-sm'
