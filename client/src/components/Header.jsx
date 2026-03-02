@@ -1,5 +1,5 @@
-import React from 'react';
-import { Activity, Bell, CheckSquare, Wifi, WifiOff } from 'lucide-react';
+import React, { useState } from 'react';
+import { Activity, Bell, CheckSquare, RefreshCw, Wifi, WifiOff } from 'lucide-react';
 
 export default function Header({
   connected,
@@ -8,6 +8,13 @@ export default function Header({
   pendingApprovalCount,
   onNotificationsClick,
 }) {
+  const [refreshing, setRefreshing] = useState(false);
+
+  async function handleRefresh() {
+    setRefreshing(true);
+    await fetch('/api/sessions/refresh', { method: 'POST' });
+    setTimeout(() => setRefreshing(false), 800);
+  }
   return (
     <header className="border-b border-[#30363d] bg-[#161b22] sticky top-0 z-40">
       <div className="max-w-7xl mx-auto px-4 py-3 flex items-center justify-between">
@@ -48,6 +55,15 @@ export default function Header({
               {pendingApprovalCount} pending approval{pendingApprovalCount !== 1 ? 's' : ''}
             </div>
           )}
+
+          {/* Refresh button */}
+          <button
+            onClick={handleRefresh}
+            title="Re-sync all sessions from server"
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded bg-[#0d1117] border border-[#30363d] hover:border-[#58a6ff] text-sm text-[#8b949e] hover:text-[#e6edf3] transition-colors"
+          >
+            <RefreshCw size={14} className={refreshing ? 'animate-spin' : ''} />
+          </button>
 
           {/* Notifications button */}
           <button

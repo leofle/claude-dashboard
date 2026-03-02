@@ -35,6 +35,13 @@ function getIo(req) {
 
 // ─── Sessions ──────────────────────────────────────────────────────────────
 
+router.post('/sessions/refresh', (req, res) => {
+  const io = getIo(req);
+  const state = getFullState();
+  io.emit('initial:state', state);
+  res.json({ ok: true, sessions: state.sessions.length });
+});
+
 router.get('/sessions', (req, res) => {
   const sessions = getAllSessions.all().map(s => ({
     ...s,
