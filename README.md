@@ -1,13 +1,14 @@
 # Claude Dashboard
 
-A real-time browser dashboard for monitoring all active Claude Code terminal sessions. See what each Claude is doing, manage todo items, respond to questions, and approve or deny dangerous tool calls — all from your browser.
+A real-time browser dashboard for monitoring all active Claude Code terminal sessions. See what each Claude is doing, manage todo items, respond to questions, and approve or deny tool calls — all from your browser. The terminal stays clean; everything routes through the dashboard.
 
 ## Features
 
 - **Live Session Monitoring** — See every active Claude Code session, what tool it's running, and how long it's been running
 - **Todo Tracking** — TodoWrite calls are intercepted and displayed in real time with progress bars
-- **Permission Approvals** — Approve or deny tool calls (Bash, Write, Edit, etc.) from the browser; Claude blocks until you decide
-- **Free-form Q&A** — Claude can call `request_user_input` via MCP to ask you questions directly in the dashboard
+- **Permission Approvals** — Approve or deny tool calls (Bash, Write, Edit, etc.) from the browser; Claude blocks until you decide. No terminal prompt.
+- **AskUserQuestion** — When Claude calls `AskUserQuestion`, the options appear as a click-to-answer UI in the dashboard. No terminal prompt.
+- **Free-form Q&A** — Claude can call `request_user_input` via MCP to ask open-ended questions directly in the dashboard
 - **Sub-agent Tree** — Visualize parent/child Claude relationships when Claude spawns sub-agents
 - **Notification Panel** — See all Claude notifications in one place
 - **Dark Terminal Theme** — Easy on the eyes, monospace font for tool names and commands
@@ -64,6 +65,15 @@ Navigate to http://localhost:4321 (production) or http://localhost:5173 (dev).
 
 Now start a Claude Code session in any terminal — it will appear in the dashboard automatically.
 
+## How terminal prompts are eliminated
+
+Claude Code normally shows its own "Yes / Yes, don't ask again / No" prompt in the terminal for tool approvals, and its own interactive UI for `AskUserQuestion`. The dashboard replaces both:
+
+1. **`permissions.allow`** in `~/.claude/settings.json` — tells Claude Code not to show its own terminal prompt for Bash, Write, Edit, etc.
+2. **`PreToolUse` hook** — intercepts every tool call before it runs. For approval tools, it blocks and shows a modal in the dashboard. For `AskUserQuestion`, it shows the question options as a click-to-select UI, then delivers the answer back to Claude via the hook's exit code, suppressing the terminal UI entirely.
+
+The terminal remains a clean log of Claude's output. All interaction happens in the browser.
+
 ## Hook Events
 
 The dashboard intercepts these Claude Code hook events:
@@ -71,7 +81,7 @@ The dashboard intercepts these Claude Code hook events:
 | Hook | Purpose |
 |------|---------|
 | `session-start` | Register new Claude session |
-| `pre-tool-use` | Block for approval on dangerous tools |
+| `pre-tool-use` | Intercept `AskUserQuestion` and approval tools; block until dashboard responds |
 | `post-tool-use` | Record tool results, intercept TodoWrite |
 | `notification` | Show Claude notifications in dashboard |
 | `stop` | Mark session as ended |
@@ -84,7 +94,7 @@ Claude can use these tools via the dashboard's MCP bridge:
 
 | Tool | Description |
 |------|-------------|
-| `request_user_input(message)` | Pauses Claude, shows question in dashboard, returns user's text response |
+| `request_user_input(message)` | Pauses Claude, shows free-text question in dashboard, returns user's response |
 | `update_status(status)` | Updates the current activity display in the dashboard |
 
 ## Configuration
@@ -92,9 +102,9 @@ Claude can use these tools via the dashboard's MCP bridge:
 Copy `.env.example` to `server/.env` and adjust:
 
 - `PORT` — Server port (default: 4321)
-- `APPROVAL_TOOLS` — Comma-separated tool names requiring browser approval
+- `APPROVAL_TOOLS` — Comma-separated tool names requiring browser approval (default: `Bash,Write,Edit,MultiEdit,NotebookEdit`)
 - `MCP_TIMEOUT` — Seconds to wait for user input before timing out (default: 300)
-- `APPROVAL_TIMEOUT` — Seconds hook waits for approval before auto-approving (default: 60)
+- `APPROVAL_TIMEOUT` — Seconds hook waits for a dashboard response before auto-approving (default: 60)
 
 ## Development
 
