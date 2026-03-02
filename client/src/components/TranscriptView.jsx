@@ -75,7 +75,7 @@ function ToolUseBlock({ toolUse }) {
         {open ? <ChevronDown size={11} className="text-[#58a6ff] flex-shrink-0" /> : <ChevronRight size={11} className="text-[#58a6ff] flex-shrink-0" />}
         <span className="font-mono text-[11px] text-[#58a6ff] font-medium">{toolUse.name}</span>
         {preview && !open && (
-          <span className="font-mono text-[10px] text-[#8b949e] truncate flex-1">{String(preview).slice(0, 80)}</span>
+          <span className="font-mono text-[10px] text-[#8b949e] truncate flex-1">{String(preview)}</span>
         )}
       </button>
       {open && inputStr && (
@@ -131,33 +131,18 @@ function TranscriptEntry({ entry }) {
 
 export default function TranscriptView({ entries = [] }) {
   const bottomRef = useRef(null);
-  const containerRef = useRef(null);
-  const [autoScroll, setAutoScroll] = useState(true);
 
-  // Auto-scroll to bottom when new entries arrive, unless user scrolled up
+  // Scroll new entries into view as they arrive
   useEffect(() => {
-    if (autoScroll && bottomRef.current) {
-      bottomRef.current.scrollIntoView({ behavior: 'smooth' });
-    }
-  }, [entries.length, autoScroll]);
-
-  function handleScroll() {
-    const el = containerRef.current;
-    if (!el) return;
-    const atBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 60;
-    setAutoScroll(atBottom);
-  }
+    bottomRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' });
+  }, [entries.length]);
 
   if (!entries.length) {
     return <p className="text-[#8b949e] text-sm italic">No conversation yet</p>;
   }
 
   return (
-    <div
-      ref={containerRef}
-      onScroll={handleScroll}
-      className="space-y-4 max-h-[32rem] overflow-y-auto pr-1"
-    >
+    <div className="space-y-4">
       {entries.map((entry, i) => (
         <TranscriptEntry key={entry.id || i} entry={entry} />
       ))}

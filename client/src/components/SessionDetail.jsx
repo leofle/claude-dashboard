@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { X, Terminal, Clock, GitBranch } from 'lucide-react';
 import TodoList from './TodoList.jsx';
 import ActivityLog from './ActivityLog.jsx';
@@ -47,6 +47,8 @@ function statusColor(status) {
 export default function SessionDetail({ session, allSessions, onClose }) {
   const elapsed = useElapsedFull(session.started_at, session.ended_at);
   const color = statusColor(session.status);
+  const [drawerWidth, setDrawerWidth] = useState(720);
+  const isResizing = useRef(false);
 
   // Close on Escape
   useEffect(() => {
@@ -54,6 +56,33 @@ export default function SessionDetail({ session, allSessions, onClose }) {
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
   }, [onClose]);
+
+  // Resize drag handlers
+  useEffect(() => {
+    function onMouseMove(e) {
+      if (!isResizing.current) return;
+      const newWidth = window.innerWidth - e.clientX;
+      setDrawerWidth(Math.min(Math.max(newWidth, 420), window.innerWidth - 80));
+    }
+    function onMouseUp() {
+      isResizing.current = false;
+      document.body.style.cursor = '';
+      document.body.style.userSelect = '';
+    }
+    window.addEventListener('mousemove', onMouseMove);
+    window.addEventListener('mouseup', onMouseUp);
+    return () => {
+      window.removeEventListener('mousemove', onMouseMove);
+      window.removeEventListener('mouseup', onMouseUp);
+    };
+  }, []);
+
+  function startResize(e) {
+    isResizing.current = true;
+    document.body.style.cursor = 'col-resize';
+    document.body.style.userSelect = 'none';
+    e.preventDefault();
+  }
 
   const children = allSessions.filter(s => s.parent_session_id === session.id);
   const hasTree = children.length > 0 || !!session.parent_session_id;
@@ -67,7 +96,16 @@ export default function SessionDetail({ session, allSessions, onClose }) {
       />
 
       {/* Drawer */}
-      <div className="fixed right-0 top-0 bottom-0 w-full max-w-xl bg-[#161b22] border-l border-[#30363d] z-50 flex flex-col overflow-hidden">
+      <div
+        className="fixed right-0 top-0 bottom-0 bg-[#161b22] border-l border-[#30363d] z-50 flex flex-col overflow-hidden"
+        style={{ width: drawerWidth }}
+      >
+        {/* Resize handle */}
+        <div
+          onMouseDown={startResize}
+          className="absolute left-0 top-0 bottom-0 w-1 cursor-col-resize hover:bg-[#58a6ff]/40 transition-colors z-10"
+        />
+
         {/* Header */}
         <div className="flex items-center justify-between px-5 py-4 border-b border-[#30363d] flex-shrink-0">
           <div className="flex items-center gap-2 min-w-0">
