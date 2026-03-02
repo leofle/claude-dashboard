@@ -1,10 +1,12 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { X, FolderOpen, ChevronDown, ChevronUp } from 'lucide-react';
+import { X, FolderOpen, ChevronDown, ChevronUp, GitBranch } from 'lucide-react';
 
 export default function LaunchSessionModal({ onClose }) {
   const [path, setPath] = useState('');
   const [prompt, setPrompt] = useState('');
   const [showPrompt, setShowPrompt] = useState(false);
+  const [useWorktree, setUseWorktree] = useState(false);
+  const [worktreeName, setWorktreeName] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const pathRef = useRef(null);
@@ -28,7 +30,12 @@ export default function LaunchSessionModal({ onClose }) {
       const res = await fetch('/api/sessions/spawn', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ path: path.trim(), prompt: prompt.trim() || undefined }),
+        body: JSON.stringify({
+          path: path.trim(),
+          prompt: prompt.trim() || undefined,
+          worktree: useWorktree || undefined,
+          worktreeName: (useWorktree && worktreeName.trim()) ? worktreeName.trim() : undefined,
+        }),
       });
       const data = await res.json();
       if (!res.ok) {
@@ -84,6 +91,29 @@ export default function LaunchSessionModal({ onClose }) {
                   className="flex-1 bg-[#0d1117] border border-[#30363d] rounded px-3 py-2 text-sm text-[#e6edf3] placeholder-[#484f58] font-mono focus:outline-none focus:border-[#58a6ff] transition-colors"
                 />
               </div>
+            </div>
+
+            {/* Git worktree toggle */}
+            <div className="flex flex-col gap-2">
+              <label className="flex items-center gap-2 cursor-pointer select-none">
+                <input
+                  type="checkbox"
+                  checked={useWorktree}
+                  onChange={(e) => setUseWorktree(e.target.checked)}
+                  className="accent-[#58a6ff]"
+                />
+                <GitBranch size={13} className="text-[#8b949e]" />
+                <span className="text-xs text-[#8b949e]">Create git worktree (isolated branch)</span>
+              </label>
+              {useWorktree && (
+                <input
+                  type="text"
+                  value={worktreeName}
+                  onChange={(e) => setWorktreeName(e.target.value)}
+                  placeholder="Branch name (optional, default: dashboard-timestamp)"
+                  className="w-full bg-[#0d1117] border border-[#30363d] rounded px-3 py-2 text-sm text-[#e6edf3] placeholder-[#484f58] font-mono focus:outline-none focus:border-[#58a6ff] transition-colors"
+                />
+              )}
             </div>
 
             {/* Optional prompt (collapsible) */}

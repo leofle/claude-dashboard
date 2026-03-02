@@ -29,13 +29,19 @@ function useElapsed(startedAt) {
   return elapsed;
 }
 
-function statusColor(status) {
+function statusColor(status, isWaiting) {
+  if (isWaiting) return '#d29922'; // amber — waiting for user
   switch (status) {
     case 'active': return '#3fb950';
-    case 'idle': return '#d29922';
+    case 'idle': return '#8b949e';
     case 'ended': return '#8b949e';
     default: return '#8b949e';
   }
+}
+
+function statusLabel(status, isWaiting) {
+  if (isWaiting) return 'waiting';
+  return status;
 }
 
 function TodoProgress({ todos = [] }) {
@@ -60,9 +66,9 @@ function TodoProgress({ todos = [] }) {
   );
 }
 
-export default function SessionCard({ session, allSessions, onClick }) {
+export default function SessionCard({ session, allSessions, isWaiting, onClick }) {
   const elapsed = useElapsed(session.started_at);
-  const color = statusColor(session.status);
+  const color = statusColor(session.status, isWaiting);
   const children = allSessions.filter(s => s.parent_session_id === session.id);
   const [killing, setKilling] = useState(false);
 
@@ -94,7 +100,7 @@ export default function SessionCard({ session, allSessions, onClick }) {
             className="inline-block w-2 h-2 rounded-full flex-shrink-0"
             style={{
               backgroundColor: color,
-              boxShadow: session.status === 'active' ? `0 0 6px ${color}` : 'none',
+              boxShadow: (session.status === 'active' || isWaiting) ? `0 0 6px ${color}` : 'none',
             }}
           />
           <span className="font-mono text-xs text-[#8b949e]">{shortId}</span>
@@ -116,7 +122,7 @@ export default function SessionCard({ session, allSessions, onClick }) {
               {killing ? 'Killing…' : 'Kill'}
             </button>
           )}
-          <span className="text-xs capitalize" style={{ color }}>{session.status}</span>
+          <span className="text-xs capitalize" style={{ color }}>{statusLabel(session.status, isWaiting)}</span>
         </div>
       </div>
 

@@ -1,7 +1,8 @@
 const express = require('express');
 const { v4: uuidv4 } = require('uuid');
 const fs = require('fs');
-const { spawn } = require('child_process');
+const path = require('path');
+const { spawn, execFileSync } = require('child_process');
 const router = express.Router();
 const sessionScanner = require('../session-scanner');
 const { pendingSpawns, spawnedChildren } = require('../spawned-sessions');
@@ -284,17 +285,42 @@ router.post('/mcp/tool', async (req, res) => {
 // ─── Spawn Session ─────────────────────────────────────────────────────────
 
 router.post('/sessions/spawn', (req, res) => {
-  const { path: cwdPath, prompt } = req.body;
+  const { path: cwdPath, prompt, worktree, worktreeName } = req.body;
   if (!cwdPath) return res.status(400).json({ error: 'path required' });
   if (!fs.existsSync(cwdPath)) return res.status(400).json({ error: 'path does not exist' });
 
+  // ── Optional git worktree creation ──────────────────────────────────────
+  let spawnCwd = cwdPath;
+  if (worktree) {
+    // Validate this is a git repo
+    try {
+      execFileSync('git', ['rev-parse', '--git-dir'], { cwd: cwdPath, stdio: 'pipe' });
+    } catch {
+      return res.status(400).json({ error: 'Not a git repository — cannot create worktree' });
+    }
+    const branchName = worktreeName || `dashboard-${Date.now()}`;
+    const parentDir = path.dirname(cwdPath);
+    const repoName = path.basename(cwdPath);
+    const worktreePath = path.join(parentDir, `${repoName}-${branchName}`);
+    try {
+      execFileSync('git', ['worktree', 'add', '-b', branchName, worktreePath], {
+        cwd: cwdPath,
+        stdio: 'pipe',
+      });
+    } catch (err) {
+      return res.status(500).json({ error: `Failed to create worktree: ${err.message}` });
+    }
+    spawnCwd = worktreePath;
+    console.log(`[api] created git worktree at ${worktreePath} (branch: ${branchName})`);
+  }
+
   const child = spawn('claude', ['--dangerously-skip-permissions'], {
-    cwd: cwdPath,
+    cwd: spawnCwd,
     stdio: ['pipe', 'pipe', 'pipe'],
     env: { ...process.env },
   });
 
-  pendingSpawns.set(cwdPath, child.pid);
+  pendingSpawns.set(spawnCwd, child.pid);
   spawnedChildren.set(child.pid, child);
 
   if (prompt) {
@@ -308,8 +334,8 @@ router.post('/sessions/spawn', (req, res) => {
     console.log(`[spawn] process ${child.pid} exited with code ${code}`);
   });
 
-  console.log(`[api] spawned claude pid=${child.pid} cwd=${cwdPath}`);
-  res.json({ pid: child.pid, message: 'Session spawning...' });
+  console.log(`[api] spawned claude pid=${child.pid} cwd=${spawnCwd}`);
+  res.json({ pid: child.pid, cwd: spawnCwd, message: 'Session spawning...' });
 });
 
 // ─── Kill Session ──────────────────────────────────────────────────────────

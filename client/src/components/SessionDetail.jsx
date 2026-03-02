@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { X, Terminal, Clock, GitBranch, Square } from 'lucide-react';
+import { X, Terminal, Clock, GitBranch, Square, GitFork } from 'lucide-react';
 import TodoList from './TodoList.jsx';
 import ActivityLog from './ActivityLog.jsx';
 import SubAgentTree from './SubAgentTree.jsx';
@@ -48,6 +48,7 @@ export default function SessionDetail({ session, allSessions, onClose }) {
   const elapsed = useElapsedFull(session.started_at, session.ended_at);
   const color = statusColor(session.status);
   const [killing, setKilling] = useState(false);
+  const [forking, setForking] = useState(false);
   const canKill = session.spawned && session.status !== 'ended';
 
   async function handleKill() {
@@ -57,6 +58,20 @@ export default function SessionDetail({ session, allSessions, onClose }) {
       await fetch(`/api/sessions/${session.id}/kill`, { method: 'POST' });
     } finally {
       setKilling(false);
+    }
+  }
+
+  async function handleFork() {
+    if (!session.cwd || forking) return;
+    setForking(true);
+    try {
+      await fetch('/api/sessions/spawn', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ path: session.cwd }),
+      });
+    } finally {
+      setForking(false);
     }
   }
 
@@ -148,6 +163,18 @@ export default function SessionDetail({ session, allSessions, onClose }) {
             </div>
           </div>
           <div className="flex items-center gap-2 flex-shrink-0 ml-3">
+            {/* Fork — spawn a new session in the same directory */}
+            {session.cwd && session.status !== 'ended' && (
+              <button
+                onClick={handleFork}
+                disabled={forking}
+                title="Fork: open a new Claude session in the same directory"
+                className="flex items-center gap-1.5 px-2.5 py-1.5 rounded text-xs text-[#8b949e] border border-[#30363d] hover:border-[#58a6ff]/50 hover:text-[#58a6ff] transition-colors disabled:opacity-50"
+              >
+                <GitFork size={12} />
+                {forking ? 'Forking…' : 'Fork'}
+              </button>
+            )}
             {canKill && (
               <button
                 onClick={handleKill}
