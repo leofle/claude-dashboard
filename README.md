@@ -5,12 +5,14 @@ A real-time browser dashboard for monitoring all active Claude Code terminal ses
 ## Features
 
 - **Live Session Monitoring** — See every active Claude Code session, what tool it's running, and how long it's been running
+- **Live Conversation Transcript** — Every message Claude writes and every tool call appears in real time in the session detail drawer, streamed directly from Claude Code's JSONL transcript file
 - **Todo Tracking** — TodoWrite calls are intercepted and displayed in real time with progress bars
 - **Permission Approvals** — Approve or deny tool calls (Bash, Write, Edit, etc.) from the browser; Claude blocks until you decide. No terminal prompt.
 - **AskUserQuestion** — When Claude calls `AskUserQuestion`, the options appear as a click-to-answer UI in the dashboard. No terminal prompt.
 - **Free-form Q&A** — Claude can call `request_user_input` via MCP to ask open-ended questions directly in the dashboard
 - **Sub-agent Tree** — Visualize parent/child Claude relationships when Claude spawns sub-agents
 - **Notification Panel** — See all Claude notifications in one place
+- **Resizable Session Drawer** — Drag the left edge of the detail panel to any width; preference is saved to localStorage
 - **Dark Terminal Theme** — Easy on the eyes, monospace font for tool names and commands
 
 ## Architecture
@@ -18,10 +20,12 @@ A real-time browser dashboard for monitoring all active Claude Code terminal ses
 ```
 Claude Code (terminal)
   ├── Hooks (bash scripts) → POST → Express :4321/hooks/...
-  └── MCP bridge (stdio) → POST → Express :4321/api/mcp/tool
+  ├── MCP bridge (stdio) → POST → Express :4321/api/mcp/tool
+  └── JSONL transcript file → fs.watch → transcript-watcher.js
 
 Express + Socket.IO :4321
-  ├── SQLite (better-sqlite3)
+  ├── SQLite (node:sqlite)
+  ├── transcript-watcher.js (tails per-session JSONL files)
   ├── Serves built React app (client/dist/) in production
   └── WebSocket → Browser (React + Vite + Tailwind)
 ```
@@ -80,7 +84,7 @@ The dashboard intercepts these Claude Code hook events:
 
 | Hook | Purpose |
 |------|---------|
-| `session-start` | Register new Claude session |
+| `session-start` | Register new Claude session; start watching its JSONL transcript file |
 | `pre-tool-use` | Intercept `AskUserQuestion` and approval tools; block until dashboard responds |
 | `post-tool-use` | Record tool results, intercept TodoWrite |
 | `notification` | Show Claude notifications in dashboard |
@@ -130,8 +134,10 @@ claude-dashboard/
 │       └── components/
 ├── hooks/            # Bash scripts for Claude Code hooks
 └── scripts/
-    ├── mcp-bridge.js # MCP stdio server
-    └── install.sh    # Setup script
+    ├── mcp-bridge.js         # MCP stdio server
+    └── install.sh            # Setup script
+server/
+├── transcript-watcher.js     # Tails JSONL transcript files and emits transcript:entry events
 ```
 
 ## License
