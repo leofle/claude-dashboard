@@ -28,7 +28,7 @@ function renderText(text) {
   return parts.map((part, i) => {
     if (part.type === 'code_block') {
       return (
-        <pre key={i} className="bg-[#0d1117] border border-[#30363d] rounded p-2 my-1 text-xs font-mono text-[#e6edf3] overflow-x-auto whitespace-pre">
+        <pre key={i} className="bg-[#0d1117] border border-[#30363d] rounded p-2 my-1 text-xs font-mono text-[#e6edf3] whitespace-pre-wrap break-all">
           {part.content.trimEnd()}
         </pre>
       );
@@ -67,19 +67,19 @@ function ToolUseBlock({ toolUse }) {
     || '';
 
   return (
-    <div className="mt-1 rounded border border-[#30363d] overflow-hidden">
+    <div className="mt-1 rounded border border-[#30363d] overflow-hidden min-w-0">
       <button
         onClick={() => setOpen(v => !v)}
-        className="w-full flex items-center gap-2 px-2 py-1.5 bg-[#161b22] hover:bg-[#1c2128] transition-colors text-left"
+        className="w-full flex items-start gap-2 px-2 py-1.5 bg-[#161b22] hover:bg-[#1c2128] transition-colors text-left flex-wrap"
       >
         {open ? <ChevronDown size={11} className="text-[#58a6ff] flex-shrink-0" /> : <ChevronRight size={11} className="text-[#58a6ff] flex-shrink-0" />}
         <span className="font-mono text-[11px] text-[#58a6ff] font-medium">{toolUse.name}</span>
         {preview && !open && (
-          <span className="font-mono text-[10px] text-[#8b949e] truncate flex-1">{String(preview)}</span>
+          <span className="font-mono text-[10px] text-[#8b949e] break-all">{String(preview)}</span>
         )}
       </button>
       {open && inputStr && (
-        <pre className="bg-[#0d1117] text-[10px] font-mono text-[#8b949e] p-2 overflow-x-auto whitespace-pre max-h-40">
+        <pre className="bg-[#0d1117] text-[10px] font-mono text-[#8b949e] p-2 whitespace-pre-wrap break-all max-h-60 overflow-y-auto">
           {inputStr}
         </pre>
       )}
@@ -92,7 +92,7 @@ function TranscriptEntry({ entry }) {
   const time = formatTime(entry.timestamp);
 
   return (
-    <div className={`flex gap-2.5 ${isUser ? 'flex-row-reverse' : ''}`}>
+    <div className={`flex gap-2.5 overflow-hidden ${isUser ? 'flex-row-reverse' : ''}`}>
       {/* Avatar */}
       <div className={`flex-shrink-0 w-6 h-6 rounded-full flex items-center justify-center mt-0.5 ${
         isUser ? 'bg-[#58a6ff]/20' : 'bg-[#3fb950]/15'
@@ -104,7 +104,7 @@ function TranscriptEntry({ entry }) {
       </div>
 
       {/* Bubble */}
-      <div className={`flex-1 min-w-0 max-w-[680px] ${isUser ? 'items-end' : 'items-start'} flex flex-col`}>
+      <div className={`flex-1 min-w-0 ${isUser ? 'items-end' : 'items-start'} flex flex-col`}>
         <div className={`flex items-center gap-2 mb-1 ${isUser ? 'flex-row-reverse' : ''}`}>
           <span className={`text-[10px] font-medium ${isUser ? 'text-[#58a6ff]' : 'text-[#3fb950]'}`}>
             {isUser ? 'You' : 'Claude'}
