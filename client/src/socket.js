@@ -7,6 +7,7 @@ const URL = typeof window !== 'undefined'
   : 'http://localhost:4321';
 
 const socket = io(URL, {
+  transports: ['websocket'],   // skip polling — avoids Vite proxy errors
   autoConnect: true,
   reconnection: true,
   reconnectionAttempts: Infinity,
