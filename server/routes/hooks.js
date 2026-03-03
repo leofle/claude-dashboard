@@ -34,7 +34,6 @@ const {
 
 const { pendingSpawns } = require('../spawned-sessions');
 const { push } = require('../push');
-const { getAllPushSubscriptions, deletePushSubscription } = require('../db');
 
 const { startWatching, stopWatching } = require('../transcript-watcher');
 
