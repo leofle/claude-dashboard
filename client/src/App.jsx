@@ -101,15 +101,34 @@ function reducer(state, action) {
         ),
       };
 
-    case 'TRANSCRIPT_ENTRY':
+    case 'TRANSCRIPT_ENTRY': {
       return {
         ...state,
-        sessions: state.sessions.map(s =>
-          s.id === action.payload.session_id
-            ? { ...s, transcript: [...(s.transcript || []), action.payload] }
-            : s
-        ),
+        sessions: state.sessions.map(s => {
+          if (s.id !== action.payload.session_id) return s;
+          // Skip if already present (dedup by id)
+          if ((s.transcript || []).some(e => e.id === action.payload.id)) return s;
+          return { ...s, transcript: [...(s.transcript || []), action.payload] };
+        }),
       };
+    }
+
+    case 'TRANSCRIPT_LOADED': {
+      // Merge server-fetched entries with any in-memory entries, deduped by id
+      return {
+        ...state,
+        sessions: state.sessions.map(s => {
+          if (s.id !== action.payload.session_id) return s;
+          const existing = s.transcript || [];
+          const serverIds = new Set(action.payload.entries.map(e => e.id));
+          const extra = existing.filter(e => !serverIds.has(e.id));
+          const merged = [...action.payload.entries, ...extra].sort(
+            (a, b) => new Date(a.timestamp) - new Date(b.timestamp)
+          );
+          return { ...s, transcript: merged };
+        }),
+      };
+    }
 
     case 'NOTIFICATION_NEW':
       return {
@@ -253,6 +272,18 @@ export default function App() {
       if (updated) setSelectedSession(updated);
     }
   }, [state.sessions]);
+
+  // When a session is opened, fetch fresh transcript from server to fill any gaps
+  useEffect(() => {
+    if (!selectedSession) return;
+    fetch(`/api/sessions/${selectedSession.id}/transcript`)
+      .then(r => r.json())
+      .then(entries => {
+        if (!Array.isArray(entries) || entries.length === 0) return;
+        dispatch({ type: 'TRANSCRIPT_LOADED', payload: { session_id: selectedSession.id, entries } });
+      })
+      .catch(() => {});
+  }, [selectedSession?.id]);
 
   const handleApprove = useCallback(async (approvalId, approved, denyReason) => {
     try {

@@ -57,7 +57,7 @@ function extractEntry(d) {
 }
 
 function doWatch(sessionId, transcriptPath, io) {
-  const state = { position: 0, watcher: null };
+  const state = { position: 0, watcher: null, pollInterval: null };
 
   function readNewLines() {
     try {
@@ -94,13 +94,16 @@ function doWatch(sessionId, transcriptPath, io) {
   // Read any content already in the file
   readNewLines();
 
+  // Poll every 2s as a fallback — fs.watch can miss events on macOS
+  // (e.g. atomic writes that use rename, or coalesced FSEvents)
+  state.pollInterval = setInterval(readNewLines, 2000);
+
   try {
-    state.watcher = fs.watch(transcriptPath, (eventType) => {
-      if (eventType === 'change') readNewLines();
-    });
-    state.watcher.on('error', () => watchers.delete(sessionId));
+    // Handle both 'change' and 'rename' — some apps use atomic rename writes
+    state.watcher = fs.watch(transcriptPath, () => readNewLines());
+    state.watcher.on('error', () => {});
   } catch {
-    // Ignore watch errors
+    // Ignore watch errors — polling will still work
   }
 
   watchers.set(sessionId, state);
@@ -127,6 +130,7 @@ function stopWatching(sessionId) {
   if (state?.watcher) {
     try { state.watcher.close(); } catch {}
   }
+  if (state?.pollInterval) clearInterval(state.pollInterval);
   watchers.delete(sessionId);
 }
 

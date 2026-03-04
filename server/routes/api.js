@@ -2,7 +2,8 @@ const express = require('express');
 const { v4: uuidv4 } = require('uuid');
 const fs = require('fs');
 const path = require('path');
-const { spawn, execFileSync } = require('child_process');
+const { execFileSync } = require('child_process');
+const pty = require('node-pty');
 const router = express.Router();
 const sessionScanner = require('../session-scanner');
 const { pendingSpawns, spawnedChildren } = require('../spawned-sessions');
@@ -42,6 +43,7 @@ const {
   insertPushSubscription,
   deletePushSubscription,
   getAllPushSubscriptions,
+  getTranscriptEntries,
 } = require('../db');
 
 function sendPush(payload) {
@@ -88,6 +90,12 @@ router.get('/sessions/:id', (req, res) => {
     todos: getTodosForSession.all(session.id),
     recentEvents: getRecentToolEvents.all(session.id),
   });
+});
+
+router.get('/sessions/:id/transcript', (req, res) => {
+  const session = getSession.get(req.params.id);
+  if (!session) return res.status(404).json({ error: 'Not found' });
+  res.json(getTranscriptEntries.all(session.id));
 });
 
 // ─── Notifications ─────────────────────────────────────────────────────────
@@ -329,24 +337,30 @@ router.post('/sessions/spawn', (req, res) => {
     console.log(`[api] created git worktree at ${worktreePath} (branch: ${branchName})`);
   }
 
-  const child = spawn('claude', ['--dangerously-skip-permissions'], {
+  const spawnEnv = { ...process.env };
+  // Remove Claude Code nesting-detection vars so the child can start cleanly
+  delete spawnEnv.CLAUDECODE;
+  delete spawnEnv.CLAUDE_CODE_ENTRYPOINT;
+
+  const child = pty.spawn('claude', ['--dangerously-skip-permissions'], {
+    name: 'xterm-color',
+    cols: 220,
+    rows: 50,
     cwd: spawnCwd,
-    stdio: ['pipe', 'pipe', 'pipe'],
-    env: { ...process.env },
+    env: spawnEnv,
   });
 
   pendingSpawns.set(spawnCwd, child.pid);
   spawnedChildren.set(child.pid, child);
 
   if (prompt) {
-    child.stdin.write(prompt + '\n');
+    child.write(prompt + '\r');
   }
 
-  child.stdout.on('data', (d) => process.stdout.write(`[spawn:${child.pid}] ${d}`));
-  child.stderr.on('data', (d) => process.stderr.write(`[spawn:${child.pid}] ${d}`));
-  child.on('exit', (code) => {
+  child.onData((d) => process.stdout.write(`[spawn:${child.pid}] ${d}`));
+  child.onExit(({ exitCode }) => {
     spawnedChildren.delete(child.pid);
-    console.log(`[spawn] process ${child.pid} exited with code ${code}`);
+    console.log(`[spawn] process ${child.pid} exited with code ${exitCode}`);
   });
 
   console.log(`[api] spawned claude pid=${child.pid} cwd=${spawnCwd}`);
@@ -427,6 +441,13 @@ router.post('/push/unsubscribe', (req, res) => {
   if (!endpoint) return res.status(400).json({ error: 'endpoint required' });
   deletePushSubscription.run(endpoint);
   res.json({ ok: true });
+});
+
+router.post('/push/test', (req, res) => {
+  const subscribers = getAllPushSubscriptions.all().length;
+  sendPush({ title: '🤖 Claude Dashboard', body: 'Push notifications are working!', tag: 'test' });
+  console.log(`[api] test push sent to ${subscribers} subscriber(s)`);
+  res.json({ ok: true, subscribers });
 });
 
 // ─── Health ────────────────────────────────────────────────────────────────

@@ -1,9 +1,12 @@
+self.addEventListener('install', () => self.skipWaiting());
+self.addEventListener('activate', (event) => event.waitUntil(clients.claim()));
+
 self.addEventListener('push', (event) => {
   const data = event.data?.json() ?? {};
+  console.log('[sw] push received:', data);
   event.waitUntil(
     self.registration.showNotification(data.title || 'Claude Dashboard', {
       body: data.body || '',
-      icon: 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><text y=".9em" font-size="90">🤖</text></svg>',
       tag: data.tag || 'claude-dashboard',
       renotify: true,
       data: { url: '/' },

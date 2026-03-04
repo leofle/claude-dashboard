@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Bell, BellOff, BellDot, CheckSquare, Plus, RefreshCw, Wifi, WifiOff } from 'lucide-react';
+import { Bell, BellOff, BellDot, CheckSquare, Plus, RefreshCw, Send, Wifi, WifiOff } from 'lucide-react';
 import LaunchSessionModal from './LaunchSessionModal.jsx';
 import { usePushNotifications } from '../hooks/usePushNotifications.js';
 
@@ -12,7 +12,24 @@ export default function Header({
 }) {
   const [refreshing, setRefreshing] = useState(false);
   const [showLaunch, setShowLaunch] = useState(false);
+  const [testPushState, setTestPushState] = useState(null); // null | 'sent' | 'no-subs'
   const { supported: pushSupported, enabled: pushEnabled, loading: pushLoading, toggle: togglePush } = usePushNotifications();
+
+  async function handleTestPush() {
+    setTestPushState(null);
+
+    // Step 1: try a direct browser notification (no service worker) to confirm
+    // the OS/browser will actually show notifications at all.
+    if (Notification.permission === 'granted') {
+      new Notification('Claude Dashboard', { body: 'Direct notification — if you see this, basic notifications work.' });
+    }
+
+    // Step 2: send the server-side push
+    const res = await fetch('/api/push/test', { method: 'POST' });
+    const data = await res.json();
+    setTestPushState(data.subscribers > 0 ? 'sent' : 'no-subs');
+    setTimeout(() => setTestPushState(null), 3000);
+  }
 
   async function handleRefresh() {
     setRefreshing(true);
@@ -61,20 +78,39 @@ export default function Header({
               </div>
             )}
 
-            {/* Push notifications toggle */}
+            {/* Push notifications toggle + test */}
             {pushSupported && (
-              <button
-                onClick={togglePush}
-                disabled={pushLoading}
-                title={pushEnabled ? 'Push notifications on — click to disable' : 'Enable push notifications'}
-                className={`p-2 rounded-md transition-colors disabled:opacity-50 ${
-                  pushEnabled
-                    ? 'text-[#3fb950] hover:bg-[#1c2128]'
-                    : 'text-[#484f58] hover:text-[#8b949e] hover:bg-[#1c2128]'
-                }`}
-              >
-                {pushEnabled ? <BellDot size={15} /> : <BellOff size={15} />}
-              </button>
+              <>
+                {pushEnabled && (
+                  <button
+                    onClick={handleTestPush}
+                    disabled={testPushState !== null}
+                    title="Send a test push notification"
+                    className={`flex items-center gap-1 px-2 py-1.5 rounded-md text-[11px] transition-colors disabled:cursor-default ${
+                      testPushState === 'sent'    ? 'text-[#3fb950]' :
+                      testPushState === 'no-subs' ? 'text-[#f85149]' :
+                      'text-[#484f58] hover:text-[#8b949e] hover:bg-[#1c2128]'
+                    }`}
+                  >
+                    <Send size={12} />
+                    {testPushState === 'sent'    ? 'Sent' :
+                     testPushState === 'no-subs' ? 'No subscribers' :
+                     'Test'}
+                  </button>
+                )}
+                <button
+                  onClick={togglePush}
+                  disabled={pushLoading}
+                  title={pushEnabled ? 'Push notifications on — click to disable' : 'Enable push notifications'}
+                  className={`p-2 rounded-md transition-colors disabled:opacity-50 ${
+                    pushEnabled
+                      ? 'text-[#3fb950] hover:bg-[#1c2128]'
+                      : 'text-[#484f58] hover:text-[#8b949e] hover:bg-[#1c2128]'
+                  }`}
+                >
+                  {pushEnabled ? <BellDot size={15} /> : <BellOff size={15} />}
+                </button>
+              </>
             )}
 
             {/* In-app notifications panel */}

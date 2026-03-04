@@ -53,6 +53,7 @@ export default function SessionDetail({ session, allSessions, isWaiting, onClose
   const color = statusColor(session.status, isWaiting);
   const [killing, setKilling] = useState(false);
   const [forking, setForking] = useState(false);
+  const [forkDone, setForkDone] = useState(false);
   const [editingName, setEditingName] = useState(false);
   const [nameDraft, setNameDraft] = useState('');
   const nameInputRef = useRef(null);
@@ -104,12 +105,17 @@ export default function SessionDetail({ session, allSessions, isWaiting, onClose
   async function handleFork() {
     if (!session.cwd || forking) return;
     setForking(true);
+    setForkDone(false);
     try {
-      await fetch('/api/sessions/spawn', {
+      const res = await fetch('/api/sessions/spawn', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ path: session.cwd }),
       });
+      if (res.ok) {
+        setForkDone(true);
+        setTimeout(() => setForkDone(false), 2500);
+      }
     } finally {
       setForking(false);
     }
@@ -170,12 +176,16 @@ export default function SessionDetail({ session, allSessions, isWaiting, onClose
           {session.cwd && session.status !== 'ended' && (
             <button
               onClick={handleFork}
-              disabled={forking}
+              disabled={forking || forkDone}
               title="Fork: open a new Claude session in the same directory"
-              className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs text-[#8b949e] hover:text-[#e6edf3] hover:bg-[#1c2128] border border-transparent hover:border-[#30363d] transition-colors disabled:opacity-50"
+              className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs border border-transparent transition-colors disabled:cursor-default ${
+                forkDone
+                  ? 'text-[#3fb950] bg-[#3fb950]/10 border-[#3fb950]/20'
+                  : 'text-[#8b949e] hover:text-[#e6edf3] hover:bg-[#1c2128] hover:border-[#30363d] disabled:opacity-50'
+              }`}
             >
               <GitFork size={12} />
-              {forking ? 'Forking…' : 'Fork'}
+              {forking ? 'Forking…' : forkDone ? 'Launched — check sidebar' : 'Fork'}
             </button>
           )}
           {canKill && (
